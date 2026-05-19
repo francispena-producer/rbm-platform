@@ -425,43 +425,34 @@ export default function Platform() {
     window._nt=setTimeout(async()=>{ await supabase.from('project_notes').upsert({project_id:ap.id,...nxt},{onConflict:'project_id'}) },1000)
   }
 
-  function addCmt(pid,area) {
-    // Not needed with textarea approach
+  function addCmt(pieceId, area) {
+    const cur = fbToItems(fb[pieceId]?.[area]?.feedback || '')
+    const next = [...cur, { id: Date.now(), text: '' }]
+    setFb(f => ({ ...f, [pieceId]: { ...f[pieceId], [area]: { ...(f[pieceId]?.[area] || { status: 'pendiente', sources: [] }), feedback: itemsToFb(next) } } }))
   }
-  function upCmt(pid,area,idx,value) {
-    // Not needed with textarea approach  
-  }
-  function delCmt(pid,area,idx) {
-    // Not needed with textarea approach
-  }
-  function upCmt(pid,area,idx,value) {
-    const cur=fbToItems(fb[pid]?.[area]?.feedback||'')
-    const updated=cur.map((c,i)=>i===idx?{...c,text:value}:c)
-    const newFeedback=itemsToFb(updated)
-    // Update state directly
-    setFb(f=>({...f,[pid]:{...f[pid],[area]:{...(f[pid]?.[area]||{status:'pendiente',sources:[]}),feedback:newFeedback}}}))
-    // Save to DB with debounce
+
+  function upCmt(pieceId, area, idx, value) {
+    const cur = fbToItems(fb[pieceId]?.[area]?.feedback || '')
+    const updated = cur.map((c, i) => i === idx ? { ...c, text: value } : c)
+    const newFeedback = itemsToFb(updated)
+    setFb(f => ({ ...f, [pieceId]: { ...f[pieceId], [area]: { ...(f[pieceId]?.[area] || { status: 'pendiente', sources: [] }), feedback: newFeedback } } }))
     setSv('saving')
     clearTimeout(window._st)
-    window._st=setTimeout(async()=>{
-      const cur2=fb[pid]?.[area]||{status:'pendiente',sources:[]}
-      const {data:existing}=await supabase.from('piece_feedback').select('id').eq('piece_id',pid).eq('area',area).single()
-      if(existing?.id) {
-        await supabase.from('piece_feedback').update({feedback:newFeedback,status:cur2.status,sources:cur2.sources,updated_at:new Date().toISOString()}).eq('id',existing.id)
-      } else {
-        await supabase.from('piece_feedback').insert({piece_id:pid,area,feedback:newFeedback,status:cur2.status||'pendiente',sources:cur2.sources||[]})
-      }
-      setSv('saved'); setTimeout(()=>setSv('idle'),2000)
-      // Sync todos
-      const piece=pieces.find(p=>p.id===pid)
-      if(piece&&ap) syncTodos(pid,piece.name,area,updated)
-    },1000)
+    window._st = setTimeout(async () => {
+      const cur2 = fb[pieceId]?.[area] || { status: 'pendiente', sources: [] }
+      const { data: ex } = await supabase.from('piece_feedback').select('id').eq('piece_id', pieceId).eq('area', area).single()
+      if (ex?.id) await supabase.from('piece_feedback').update({ feedback: newFeedback, status: cur2.status, sources: cur2.sources }).eq('id', ex.id)
+      else await supabase.from('piece_feedback').insert({ piece_id: pieceId, area, feedback: newFeedback, status: 'pendiente', sources: [] })
+      setSv('saved'); setTimeout(() => setSv('idle'), 2000)
+      const piece = pieces.find(p => p.id === pieceId)
+      if (piece && ap) syncTodos(pieceId, piece.name, area, updated)
+    }, 1000)
   }
-  function delCmt(pid,area,idx) {
-    const cur=fbToItems(fb[pid]?.[area]?.feedback||'')
-    cur.splice(idx,1)
-    const newFeedback=itemsToFb(cur)
-    setFb(f=>({...f,[pid]:{...f[pid],[area]:{...(f[pid]?.[area]||{status:'pendiente',sources:[]}),feedback:newFeedback}}}))
+
+  function delCmt(pieceId, area, idx) {
+    const cur = fbToItems(fb[pieceId]?.[area]?.feedback || '')
+    cur.splice(idx, 1)
+    setFb(f => ({ ...f, [pieceId]: { ...f[pieceId], [area]: { ...(f[pieceId]?.[area] || { status: 'pendiente', sources: [] }), feedback: itemsToFb(cur) } } }))
   }
 
   async function syncTodos(pid,pname,area,items) {
@@ -762,26 +753,29 @@ export default function Platform() {
                                         ))}
                                       </div>
                                     )}
-                                    <textarea
-                                      style={{width:'100%',background:'#111',border:`1px solid ${a.color}40`,borderRadius:'4px',padding:'8px 10px',color:'var(--tx)',fontFamily:'DM Sans,sans-serif',fontSize:'12px',lineHeight:'1.6',minHeight:'80px',outline:'none',resize:'vertical'}}
-                                      placeholder={a.placeholder}
-                                      value={af.feedback||''}
-                                      onChange={e=>{
-                                        const val=e.target.value
-                                        const pieceId=piece.id
-                                        const areaKey=a.key
-                                        setFb(f=>({...f,[pieceId]:{...f[pieceId],[areaKey]:{...(f[pieceId]?.[areaKey]||{status:'pendiente',sources:[]}),feedback:val}}}))
-                                        setSv('saving')
-                                        clearTimeout(window._st)
-                                        window._st=setTimeout(async()=>{
-                                          const cur2=fb[pieceId]?.[areaKey]||{status:'pendiente',sources:[]}
-                                          const {data:ex}=await supabase.from('piece_feedback').select('id').eq('piece_id',pieceId).eq('area',areaKey).single()
-                                          if(ex?.id) await supabase.from('piece_feedback').update({feedback:val,status:cur2.status,sources:cur2.sources}).eq('id',ex.id)
-                                          else await supabase.from('piece_feedback').insert({piece_id:pieceId,area:areaKey,feedback:val,status:'pendiente',sources:[]})
-                                          setSv('saved'); setTimeout(()=>setSv('idle'),2000)
-                                        },1000)
-                                      }}
-                                    />
+                                    <div style={{display:'flex',flexDirection:'column',gap:'4px',marginBottom:'8px'}}>
+                                      {fbToItems(af.feedback).map((item, idx) => (
+                                        <div key={item.id} style={{display:'flex',alignItems:'flex-start',gap:'6px',background:'#111',border:'1px solid var(--bd)',borderRadius:'4px',padding:'6px 8px'}}>
+                                          <span style={{color:'var(--mu)',flexShrink:0,marginTop:'1px',userSelect:'none'}}>·</span>
+                                          <textarea
+                                            style={{flex:1,background:'transparent',border:'none',color:'var(--tx)',fontFamily:'DM Sans,sans-serif',fontSize:'12px',lineHeight:'1.5',outline:'none',resize:'none',minHeight:'20px'}}
+                                            placeholder="Escribe el comentario..."
+                                            value={item.text}
+                                            rows={1}
+                                            onChange={e => {
+                                              e.target.style.height = 'auto'
+                                              e.target.style.height = e.target.scrollHeight + 'px'
+                                              upCmt(piece.id, a.key, idx, e.target.value)
+                                            }}
+                                          />
+                                          <button style={{background:'none',border:'none',color:'var(--mu)',fontSize:'12px',padding:'0 2px',flexShrink:0,cursor:'pointer',lineHeight:1,opacity:0}} className="cdl"
+                                            onMouseOver={e=>e.target.style.opacity=1} onMouseOut={e=>e.target.style.opacity=0}
+                                            onClick={() => delCmt(piece.id, a.key, idx)}>✕</button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <button style={{display:'flex',alignItems:'center',gap:'5px',background:'none',border:'1px dashed var(--bd)',borderRadius:'4px',color:'var(--mu)',fontSize:'10px',fontFamily:'DM Mono,monospace',padding:'5px 10px',width:'100%',cursor:'pointer',letterSpacing:'.05em'}}
+                                      onClick={() => addCmt(piece.id, a.key)}>+ Agregar comentario</button>
                                   </div>
                                 )
                               })}
@@ -807,24 +801,28 @@ export default function Platform() {
                                   </div>
                                 </>)}
                               </div>
-                              <textarea
-                                style={{width:'100%',background:'#111',border:'1px solid #f9731640',borderRadius:'4px',padding:'8px 10px',color:'var(--tx)',fontFamily:'DM Sans,sans-serif',fontSize:'12px',lineHeight:'1.6',minHeight:'80px',outline:'none',resize:'vertical'}}
-                                placeholder="Efectos visuales, compositing, motion graphics..."
-                                value={pf2.vfx?.feedback||''}
-                                onChange={e=>{
-                                  const val=e.target.value
-                                  setFb(f=>({...f,[piece.id]:{...f[piece.id],vfx:{...(f[piece.id]?.vfx||{status:'pendiente',sources:[]}),feedback:val}}}))
-                                  setSv('saving')
-                                  clearTimeout(window._st)
-                                  window._st=setTimeout(async()=>{
-                                    const cur2=fb[piece.id]?.vfx||{status:'pendiente',sources:[]}
-                                    const {data:ex}=await supabase.from('piece_feedback').select('id').eq('piece_id',piece.id).eq('area','vfx').single()
-                                    if(ex?.id) await supabase.from('piece_feedback').update({feedback:val,status:cur2.status,sources:cur2.sources}).eq('id',ex.id)
-                                    else await supabase.from('piece_feedback').insert({piece_id:piece.id,area:'vfx',feedback:val,status:'pendiente',sources:[]})
-                                    setSv('saved'); setTimeout(()=>setSv('idle'),2000)
-                                  },1000)
-                                }}
-                              />
+                              <div style={{display:'flex',flexDirection:'column',gap:'4px',marginBottom:'8px'}}>
+                                {fbToItems(pf2.vfx?.feedback||'').map((item, idx) => (
+                                  <div key={item.id} style={{display:'flex',alignItems:'flex-start',gap:'6px',background:'#111',border:'1px solid var(--bd)',borderRadius:'4px',padding:'6px 8px'}}>
+                                    <span style={{color:'var(--mu)',flexShrink:0,marginTop:'1px',userSelect:'none'}}>·</span>
+                                    <textarea
+                                      style={{flex:1,background:'transparent',border:'none',color:'var(--tx)',fontFamily:'DM Sans,sans-serif',fontSize:'12px',lineHeight:'1.5',outline:'none',resize:'none',minHeight:'20px'}}
+                                      placeholder="Escribe el comentario..."
+                                      value={item.text}
+                                      rows={1}
+                                      onChange={e => {
+                                        e.target.style.height = 'auto'
+                                        e.target.style.height = e.target.scrollHeight + 'px'
+                                        upCmt(piece.id, 'vfx', idx, e.target.value)
+                                      }}
+                                    />
+                                    <button style={{background:'none',border:'none',color:'var(--mu)',fontSize:'12px',padding:'0 2px',flexShrink:0,cursor:'pointer',lineHeight:1}}
+                                      onClick={() => delCmt(piece.id, 'vfx', idx)}>✕</button>
+                                  </div>
+                                ))}
+                              </div>
+                              <button style={{display:'flex',alignItems:'center',gap:'5px',background:'none',border:'1px dashed var(--bd)',borderRadius:'4px',color:'var(--mu)',fontSize:'10px',fontFamily:'DM Mono,monospace',padding:'5px 10px',width:'100%',cursor:'pointer',letterSpacing:'.05em'}}
+                                onClick={() => addCmt(piece.id, 'vfx')}>+ Agregar comentario</button>
                             </div>
 
                             <div className="hw">
@@ -897,7 +895,30 @@ export default function Platform() {
                             <span style={{color:'var(--mu)',fontSize:'10px'}}>{os[s2.id]?'▲':'▼'}</span>
                           </div>
                           <div className={`sb2 ${os[s2.id]?'open':''}`}>
-                            {s2.notas&&<p style={{fontSize:'12px',color:'var(--mi)',fontStyle:'italic'}}>{s2.notas}</p>}
+                            {s2.notas&&<p style={{fontSize:'12px',color:'var(--mi)',fontStyle:'italic',marginBottom:'10px'}}>{s2.notas}</p>}
+                            {s2.data?.pieces?.map(p=>{
+                              const snapFb = s2.data?.feedback?.[p.id] || {}
+                              const hasContent = Object.values(snapFb).some(a=>a?.feedback?.trim().length>0)
+                              if(!hasContent) return null
+                              return (
+                                <div key={p.id} style={{marginBottom:'12px',paddingBottom:'12px',borderBottom:'1px solid var(--bd)'}}>
+                                  <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'6px'}}>
+                                    <span style={{fontSize:'9px',fontFamily:'DM Mono,monospace',background:'var(--ad)',color:'var(--ac)',padding:'2px 6px',borderRadius:'3px'}}>{p.tag}</span>
+                                    <span style={{fontSize:'12px',fontWeight:500}}>{p.name}</span>
+                                    <span style={{fontSize:'10px',fontFamily:'DM Mono,monospace',color:SC[p.status]||'var(--mu)',marginLeft:'auto'}}>{SL[p.status]||p.status}</span>
+                                  </div>
+                                  {Object.entries(snapFb).map(([area, aData])=>{
+                                    if(!aData?.feedback?.trim()) return null
+                                    return (
+                                      <div key={area} style={{marginBottom:'4px'}}>
+                                        <span style={{fontSize:'9px',fontFamily:'DM Mono,monospace',color:ACOL[area]||'var(--mu)',textTransform:'uppercase',letterSpacing:'.1em'}}>{ALBL[area]||area}</span>
+                                        <p style={{fontSize:'11px',color:'var(--mi)',lineHeight:1.5,marginTop:'2px'}}>{aData.feedback}</p>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )
+                            })}
                           </div>
                         </div>
                       ))}
