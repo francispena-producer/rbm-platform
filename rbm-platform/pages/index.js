@@ -435,14 +435,15 @@ export default function Platform() {
     const cur = fbToItems(fb[pieceId]?.[area]?.feedback || '')
     const updated = cur.map((c, i) => i === idx ? { ...c, text: value } : c)
     const newFeedback = itemsToFb(updated)
-    setFb(f => ({ ...f, [pieceId]: { ...f[pieceId], [area]: { ...(f[pieceId]?.[area] || { status: 'pendiente', sources: [] }), feedback: newFeedback } } }))
+    const curStatus = fb[pieceId]?.[area]?.status || 'pendiente'
+    const curSources = fb[pieceId]?.[area]?.sources || []
+    setFb(f => ({ ...f, [pieceId]: { ...f[pieceId], [area]: { status: curStatus, sources: curSources, feedback: newFeedback } } }))
     setSv('saving')
     clearTimeout(window._st)
     window._st = setTimeout(async () => {
-      const cur2 = fb[pieceId]?.[area] || { status: 'pendiente', sources: [] }
       const { data: ex } = await supabase.from('piece_feedback').select('id').eq('piece_id', pieceId).eq('area', area).single()
-      if (ex?.id) await supabase.from('piece_feedback').update({ feedback: newFeedback, status: cur2.status, sources: cur2.sources }).eq('id', ex.id)
-      else await supabase.from('piece_feedback').insert({ piece_id: pieceId, area, feedback: newFeedback, status: 'pendiente', sources: [] })
+      if (ex?.id) await supabase.from('piece_feedback').update({ feedback: newFeedback, status: curStatus, sources: curSources }).eq('id', ex.id)
+      else await supabase.from('piece_feedback').insert({ piece_id: pieceId, area, feedback: newFeedback, status: curStatus, sources: curSources })
       setSv('saved'); setTimeout(() => setSv('idle'), 2000)
       const piece = pieces.find(p => p.id === pieceId)
       if (piece && ap) syncTodos(pieceId, piece.name, area, updated)
@@ -831,12 +832,27 @@ export default function Platform() {
                               </button>
                               <div className={`hl ${isH?'open':''}`}>
                                 {snaps.length===0&&<p style={{fontSize:'11px',color:'var(--mu)',paddingTop:'6px'}}>Sin historial aún.</p>}
-                                {snaps.map(s2=>(
-                                  <div key={s2.id} className="hr">
-                                    <span className="hrn">{s2.ronda}</span>
-                                    <span className="hrt">{s2.fecha}</span>
-                                  </div>
-                                ))}
+                                {snaps.map(s2=>{
+                                  const snapFb = s2.data?.feedback?.[piece.id] || {}
+                                  const hasContent = Object.values(snapFb).some(a=>a?.feedback?.trim().length>0)
+                                  return (
+                                    <div key={s2.id} style={{padding:'8px 0',borderBottom:'1px solid var(--bd)'}}>
+                                      <div style={{display:'flex',gap:'8px',marginBottom:'4px'}}>
+                                        <span style={{fontSize:'9px',fontFamily:'DM Mono,monospace',color:'var(--mu)',minWidth:'38px'}}>{s2.ronda}</span>
+                                        <span style={{fontSize:'11px',color:'var(--mi)'}}>{s2.fecha}</span>
+                                      </div>
+                                      {hasContent ? Object.entries(snapFb).map(([area,aData])=>{
+                                        if(!aData?.feedback?.trim()) return null
+                                        return (
+                                          <div key={area} style={{marginLeft:'46px',marginBottom:'3px'}}>
+                                            <span style={{fontSize:'9px',fontFamily:'DM Mono,monospace',color:ACOL[area]||'var(--mu)',textTransform:'uppercase',letterSpacing:'.08em'}}>{ALBL[area]||area}: </span>
+                                            <span style={{fontSize:'11px',color:'var(--mi)'}}>{aData.feedback}</span>
+                                          </div>
+                                        )
+                                      }) : <p style={{marginLeft:'46px',fontSize:'11px',color:'var(--mu)'}}>Sin comentarios en esta ronda.</p>}
+                                    </div>
+                                  )
+                                })}
                               </div>
                             </div>
                           </div>
