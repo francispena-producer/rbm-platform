@@ -306,6 +306,10 @@ export default function Platform() {
   const [openSnaps, setOpenSnaps] = useState({})
   const [filter, setFilter]       = useState('all')
   const [saveStatus, setSaveStatus] = useState('idle')
+  const [showAddPiece, setShowAddPiece] = useState(false)
+  const [newPieceName, setNewPieceName] = useState('')
+  const [newPieceTag, setNewPieceTag]   = useState('')
+  const [newPieceGroup, setNewPieceGroup] = useState('')
   const [showAddMember, setShowAddMember] = useState(false)
   const [newMemberEmail, setNewMemberEmail] = useState('')
   const [newMemberName, setNewMemberName]   = useState('')
@@ -389,6 +393,8 @@ export default function Platform() {
     setFeedback({})
     setApprovals({})
     setVisibility({})
+    setMembers([])
+    setSnapshots([])
     setActiveProject(proj)
     setView('project')
     setFilter('all')
@@ -529,6 +535,21 @@ export default function Platform() {
       setMembers(m => [...m.filter(mb => mb.id !== existingUser.id), { ...existingUser, memberRole: newMemberRole }])
     }
     setShowAddMember(false); setNewMemberEmail(''); setNewMemberName(''); setNewMemberRole('agencia')
+  }
+
+  async function addPiece() {
+    if (!newPieceName.trim() || !newPieceTag.trim()) return
+    const position = pieces.length + 1
+    const { data } = await supabase.from('pieces').insert({
+      project_id: activeProject.id,
+      tag: newPieceTag.toUpperCase(),
+      name: newPieceName,
+      group_name: newPieceGroup.toLowerCase() || newPieceTag.toLowerCase(),
+      position,
+      status: 'pendiente',
+    }).select().single()
+    if (data) setPieces(p => [...p, data])
+    setShowAddPiece(false); setNewPieceName(''); setNewPieceTag(''); setNewPieceGroup('')
   }
 
   // ── CLOSE ROUND ─────────────────────────────────────────────
@@ -930,10 +951,20 @@ export default function Platform() {
                   {visiblePieces.length === 0 && (
                     <div className="empty-state">
                       <h3>Sin piezas</h3>
-                      <p>{canManage ? 'Agrega piezas a este proyecto desde el panel de administración.' : 'No hay piezas compartidas contigo aún.'}</p>
+                      <p>{canManage ? 'Agrega las piezas de este proyecto.' : 'No hay piezas compartidas contigo aún.'}</p>
+                      {canManage && (
+                        <button className="btn-primary" style={{marginTop:'16px'}} onClick={()=>setShowAddPiece(true)}>
+                          + Agregar pieza
+                        </button>
+                      )}
                     </div>
                   )}
                   {visiblePieces.map(p => <PieceCard key={p.id} piece={p}/>)}
+                  {canManage && visiblePieces.length > 0 && (
+                    <button className="nav-item" style={{color:'var(--accent)',opacity:.8,marginTop:'8px'}} onClick={()=>setShowAddPiece(true)}>
+                      <span>+</span> Agregar pieza
+                    </button>
+                  )}
                 </div>
 
                 {/* FOOTER */}
@@ -1009,6 +1040,25 @@ export default function Platform() {
             <div className="modal-btns">
               <button className="modal-btn-cancel" onClick={()=>setShowNewProj(false)}>Cancelar</button>
               <button className="modal-btn-primary" onClick={createProject}>Crear proyecto</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD PIECE MODAL */}
+      {showAddPiece && (
+        <div className="modal-overlay" onClick={()=>setShowAddPiece(false)}>
+          <div className="modal" onClick={e=>e.stopPropagation()}>
+            <h2 className="modal-title">Agregar pieza</h2>
+            <label className="modal-label">Tag / Categoría</label>
+            <input className="modal-input" placeholder="Ej. CONCERT, FLOWERS, FRESH..." value={newPieceTag} onChange={e=>setNewPieceTag(e.target.value)}/>
+            <label className="modal-label">Nombre de la pieza</label>
+            <input className="modal-input" placeholder='Ej. Concert 15", Flowers 6"...' value={newPieceName} onChange={e=>setNewPieceName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addPiece()}/>
+            <label className="modal-label">Grupo (para filtrar)</label>
+            <input className="modal-input" placeholder="Ej. concert, flowers, fresh... (opcional)" value={newPieceGroup} onChange={e=>setNewPieceGroup(e.target.value)}/>
+            <div className="modal-btns">
+              <button className="modal-btn-cancel" onClick={()=>setShowAddPiece(false)}>Cancelar</button>
+              <button className="modal-btn-primary" onClick={addPiece}>Agregar</button>
             </div>
           </div>
         </div>
