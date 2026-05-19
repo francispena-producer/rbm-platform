@@ -288,7 +288,7 @@ export default function Platform() {
   const [npnm,setNpnm]               = useState('')
   const [npgr,setNpgr]               = useState('')
 
-  const canEdit   = prof?.role==='productor'||prof?.role==='agencia'
+  const canEdit   = true
   const canShare  = prof?.role==='productor'||prof?.role==='agencia'
   const canManage = prof?.role==='productor'
 
