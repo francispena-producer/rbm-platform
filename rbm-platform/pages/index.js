@@ -756,21 +756,17 @@ export default function Platform() {
                                     )}
                                     <div style={{display:'flex',flexDirection:'column',gap:'4px',marginBottom:'8px'}}>
                                       {fbToItems(af.feedback).map((item, idx) => (
-                                        <div key={item.id} style={{display:'flex',alignItems:'flex-start',gap:'6px',background:'#111',border:'1px solid var(--bd)',borderRadius:'4px',padding:'6px 8px'}}>
+                                        <div key={`${piece.id}-${a.key}-${idx}`} style={{display:'flex',alignItems:'flex-start',gap:'6px',background:'#111',border:'1px solid var(--bd)',borderRadius:'4px',padding:'6px 8px'}}>
                                           <span style={{color:'var(--mu)',flexShrink:0,marginTop:'1px',userSelect:'none'}}>·</span>
                                           <textarea
                                             style={{flex:1,background:'transparent',border:'none',color:'var(--tx)',fontFamily:'DM Sans,sans-serif',fontSize:'12px',lineHeight:'1.5',outline:'none',resize:'none',minHeight:'20px'}}
                                             placeholder="Escribe el comentario..."
-                                            value={item.text}
+                                            defaultValue={item.text}
                                             rows={1}
-                                            onChange={e => {
-                                              e.target.style.height = 'auto'
-                                              e.target.style.height = e.target.scrollHeight + 'px'
-                                              upCmt(piece.id, a.key, idx, e.target.value)
-                                            }}
+                                            onBlur={e => upCmt(piece.id, a.key, idx, e.target.value)}
+                                            onKeyDown={e => { if(e.key==='Enter'){ e.preventDefault(); upCmt(piece.id, a.key, idx, e.target.value); addCmt(piece.id, a.key) } }}
                                           />
-                                          <button style={{background:'none',border:'none',color:'var(--mu)',fontSize:'12px',padding:'0 2px',flexShrink:0,cursor:'pointer',lineHeight:1,opacity:0}} className="cdl"
-                                            onMouseOver={e=>e.target.style.opacity=1} onMouseOut={e=>e.target.style.opacity=0}
+                                          <button style={{background:'none',border:'none',color:'var(--mu)',fontSize:'12px',padding:'0 2px',flexShrink:0,cursor:'pointer',lineHeight:1}}
                                             onClick={() => delCmt(piece.id, a.key, idx)}>✕</button>
                                         </div>
                                       ))}
@@ -804,18 +800,15 @@ export default function Platform() {
                               </div>
                               <div style={{display:'flex',flexDirection:'column',gap:'4px',marginBottom:'8px'}}>
                                 {fbToItems(pf2.vfx?.feedback||'').map((item, idx) => (
-                                  <div key={item.id} style={{display:'flex',alignItems:'flex-start',gap:'6px',background:'#111',border:'1px solid var(--bd)',borderRadius:'4px',padding:'6px 8px'}}>
+                                  <div key={`${piece.id}-vfx-${idx}`} style={{display:'flex',alignItems:'flex-start',gap:'6px',background:'#111',border:'1px solid var(--bd)',borderRadius:'4px',padding:'6px 8px'}}>
                                     <span style={{color:'var(--mu)',flexShrink:0,marginTop:'1px',userSelect:'none'}}>·</span>
                                     <textarea
                                       style={{flex:1,background:'transparent',border:'none',color:'var(--tx)',fontFamily:'DM Sans,sans-serif',fontSize:'12px',lineHeight:'1.5',outline:'none',resize:'none',minHeight:'20px'}}
                                       placeholder="Escribe el comentario..."
-                                      value={item.text}
+                                      defaultValue={item.text}
                                       rows={1}
-                                      onChange={e => {
-                                        e.target.style.height = 'auto'
-                                        e.target.style.height = e.target.scrollHeight + 'px'
-                                        upCmt(piece.id, 'vfx', idx, e.target.value)
-                                      }}
+                                      onBlur={e => upCmt(piece.id, 'vfx', idx, e.target.value)}
+                                      onKeyDown={e => { if(e.key==='Enter'){ e.preventDefault(); upCmt(piece.id, 'vfx', idx, e.target.value); addCmt(piece.id, 'vfx') } }}
                                     />
                                     <button style={{background:'none',border:'none',color:'var(--mu)',fontSize:'12px',padding:'0 2px',flexShrink:0,cursor:'pointer',lineHeight:1}}
                                       onClick={() => delCmt(piece.id, 'vfx', idx)}>✕</button>
