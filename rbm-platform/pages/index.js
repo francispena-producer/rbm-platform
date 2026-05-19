@@ -776,10 +776,10 @@ export default function Platform() {
   // ── AUTH SCREEN ──────────────────────────────────────────────
   if (!user) return (
     <>
-      <Head><title>Production Platform</title><style>{css}</style></Head>
+      <Head><title>Roundtable</title><style>{css}</style></Head>
       <div className="auth-wrap">
         <div className="auth-box">
-          <p className="auth-logo">Production Platform</p>
+          <p className="auth-logo">Roundtable</p>
           <h1 className="auth-title">
             {authMode === 'login' ? 'Bienvenida' : authMode === 'register' ? 'Crear cuenta' : 'Recuperar contraseña'}
           </h1>
@@ -836,13 +836,13 @@ export default function Platform() {
   // ── APP ──────────────────────────────────────────────────────
   return (
     <>
-      <Head><title>Production Platform</title><style>{css}</style></Head>
+      <Head><title>Roundtable</title><style>{css}</style></Head>
       <div className="shell">
 
         {/* SIDEBAR */}
         <div className="sidebar">
           <div className="sidebar-logo">
-            <p className="sidebar-logo-tag">Production Platform</p>
+            <p className="sidebar-logo-tag">Roundtable</p>
             <p className="sidebar-logo-name">Dashboard</p>
           </div>
           <nav className="sidebar-nav">
