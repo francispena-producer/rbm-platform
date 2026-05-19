@@ -385,6 +385,10 @@ export default function Platform() {
 
   // ── PROJECT LOAD ─────────────────────────────────────────────
   async function openProject(proj) {
+    setPieces([])
+    setFeedback({})
+    setApprovals({})
+    setVisibility({})
     setActiveProject(proj)
     setView('project')
     setFilter('all')
