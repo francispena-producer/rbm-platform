@@ -426,11 +426,13 @@ export default function Platform() {
   }
 
   function addCmt(pid,area) {
-    const cur=fbToItems(fb[pid]?.[area]?.feedback||'')
-    const next=[...cur,{id:Date.now(),text:''}]
-    const newFeedback=itemsToFb(next)
-    // Update state directly
-    setFb(f=>({...f,[pid]:{...f[pid],[area]:{...(f[pid]?.[area]||{status:'pendiente',sources:[]}),feedback:newFeedback}}}))
+    // Not needed with textarea approach
+  }
+  function upCmt(pid,area,idx,value) {
+    // Not needed with textarea approach  
+  }
+  function delCmt(pid,area,idx) {
+    // Not needed with textarea approach
   }
   function upCmt(pid,area,idx,value) {
     const cur=fbToItems(fb[pid]?.[area]?.feedback||'')
@@ -760,17 +762,24 @@ export default function Platform() {
                                         ))}
                                       </div>
                                     )}
-                                    <div className="cl">
-                                      {items.map((item,idx)=>(
-                                        <div key={item.id} className="ci">
-                                          <span className="cb">·</span>
-                                          <textarea className="cin" placeholder="Escribe el comentario..." value={item.text} readOnly={!canEdit} rows={1}
-                                            onChange={e=>{e.target.style.height='auto';e.target.style.height=e.target.scrollHeight+'px';upCmt(piece.id,a.key,idx,e.target.value)}}/>
-                                          {canEdit&&<button className="cdl" onClick={()=>delCmt(piece.id,a.key,idx)}>✕</button>}
-                                        </div>
-                                      ))}
-                                    </div>
-                                    {canEdit&&<button className="acb" onClick={()=>addCmt(piece.id,a.key)}>+ Agregar comentario</button>}
+                                    <textarea
+                                      style={{width:'100%',background:'#111',border:`1px solid ${a.color}40`,borderRadius:'4px',padding:'8px 10px',color:'var(--tx)',fontFamily:'DM Sans,sans-serif',fontSize:'12px',lineHeight:'1.6',minHeight:'80px',outline:'none',resize:'vertical'}}
+                                      placeholder={a.placeholder}
+                                      value={af.feedback||''}
+                                      onChange={e=>{
+                                        const val=e.target.value
+                                        setFb(f=>({...f,[pid]:{...f[pid],[a.key]:{...(f[pid]?.[a.key]||{status:'pendiente',sources:[]}),feedback:val}}}))
+                                        setSv('saving')
+                                        clearTimeout(window._st)
+                                        window._st=setTimeout(async()=>{
+                                          const cur2=fb[pid]?.[a.key]||{status:'pendiente',sources:[]}
+                                          const {data:ex}=await supabase.from('piece_feedback').select('id').eq('piece_id',pid).eq('area',a.key).single()
+                                          if(ex?.id) await supabase.from('piece_feedback').update({feedback:val,status:cur2.status,sources:cur2.sources}).eq('id',ex.id)
+                                          else await supabase.from('piece_feedback').insert({piece_id:pid,area:a.key,feedback:val,status:'pendiente',sources:[]})
+                                          setSv('saved'); setTimeout(()=>setSv('idle'),2000)
+                                        },1000)
+                                      }}
+                                    />
                                   </div>
                                 )
                               })}
@@ -796,17 +805,24 @@ export default function Platform() {
                                   </div>
                                 </>)}
                               </div>
-                              <div className="cl">
-                                {fbToItems(pf2.vfx?.feedback||'').map((item,idx)=>(
-                                  <div key={item.id} className="ci">
-                                    <span className="cb">·</span>
-                                    <textarea className="cin" placeholder="Escribe el comentario..." value={item.text} readOnly={!canEdit} rows={1}
-                                      onChange={e=>{e.target.style.height='auto';e.target.style.height=e.target.scrollHeight+'px';upCmt(piece.id,'vfx',idx,e.target.value)}}/>
-                                    {canEdit&&<button className="cdl" onClick={()=>delCmt(piece.id,'vfx',idx)}>✕</button>}
-                                  </div>
-                                ))}
-                              </div>
-                              {canEdit&&<button className="acb" onClick={()=>addCmt(piece.id,'vfx')}>+ Agregar comentario</button>}
+                              <textarea
+                                style={{width:'100%',background:'#111',border:'1px solid #f9731640',borderRadius:'4px',padding:'8px 10px',color:'var(--tx)',fontFamily:'DM Sans,sans-serif',fontSize:'12px',lineHeight:'1.6',minHeight:'80px',outline:'none',resize:'vertical'}}
+                                placeholder="Efectos visuales, compositing, motion graphics..."
+                                value={pf2.vfx?.feedback||''}
+                                onChange={e=>{
+                                  const val=e.target.value
+                                  setFb(f=>({...f,[piece.id]:{...f[piece.id],vfx:{...(f[piece.id]?.vfx||{status:'pendiente',sources:[]}),feedback:val}}}))
+                                  setSv('saving')
+                                  clearTimeout(window._st)
+                                  window._st=setTimeout(async()=>{
+                                    const cur2=fb[piece.id]?.vfx||{status:'pendiente',sources:[]}
+                                    const {data:ex}=await supabase.from('piece_feedback').select('id').eq('piece_id',piece.id).eq('area','vfx').single()
+                                    if(ex?.id) await supabase.from('piece_feedback').update({feedback:val,status:cur2.status,sources:cur2.sources}).eq('id',ex.id)
+                                    else await supabase.from('piece_feedback').insert({piece_id:piece.id,area:'vfx',feedback:val,status:'pendiente',sources:[]})
+                                    setSv('saved'); setTimeout(()=>setSv('idle'),2000)
+                                  },1000)
+                                }}
+                              />
                             </div>
 
                             <div className="hw">
