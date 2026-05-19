@@ -60,7 +60,10 @@ const css = `
   .auth-btn{width:100%;background:var(--accent);color:#000;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:700;margin-top:4px}
   .auth-btn:hover{opacity:.9}
   .auth-error{font-size:12px;color:#f87171;margin-top:10px;text-align:center}
-  .auth-toggle{font-size:12px;color:var(--mid);text-align:center;margin-top:16px}
+  .auth-forgot{font-size:11px;color:var(--muted);text-align:right;margin-top:-8px;margin-bottom:12px}
+  .auth-forgot button{background:none;border:none;color:var(--mid);font-size:11px;text-decoration:underline;padding:0}
+  .auth-forgot button:hover{color:var(--text)}
+  .auth-success{font-size:12px;color:#4ade80;margin-top:10px;text-align:center}
   .auth-toggle button{background:none;border:none;color:var(--accent);font-size:12px;text-decoration:underline;padding:0}
 
   /* ── APP SHELL ── */
@@ -270,12 +273,13 @@ function initials(name) {
 export default function Platform() {
   // AUTH
   const [user, setUser]           = useState(null)
-  const [authMode, setAuthMode]   = useState('login') // login | register
+  const [authMode, setAuthMode]   = useState('login') // login | register | forgot
   const [email, setEmail]         = useState('')
   const [password, setPassword]   = useState('')
   const [name, setName]           = useState('')
   const [role, setRole]           = useState('agencia')
   const [authError, setAuthError] = useState('')
+  const [authSuccess, setAuthSuccess] = useState('')
   const [authLoading, setAuthLoading] = useState(false)
   const [userProfile, setUserProfile] = useState(null)
 
@@ -327,7 +331,15 @@ export default function Platform() {
   }
 
   async function handleAuth() {
-    setAuthLoading(true); setAuthError('')
+    setAuthLoading(true); setAuthError(''); setAuthSuccess('')
+    if (authMode === 'forgot') {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin,
+      })
+      if (error) setAuthError('No pudimos enviar el correo. Verifica el email.')
+      else setAuthSuccess('Te enviamos un correo para restablecer tu contraseña.')
+      setAuthLoading(false); return
+    }
     if (authMode === 'register') {
       const { data, error } = await supabase.auth.signUp({ email, password })
       if (error) { setAuthError(error.message); setAuthLoading(false); return }
@@ -743,8 +755,12 @@ export default function Platform() {
       <div className="auth-wrap">
         <div className="auth-box">
           <p className="auth-logo">Production Platform</p>
-          <h1 className="auth-title">{authMode === 'login' ? 'Bienvenida' : 'Crear cuenta'}</h1>
-          <p className="auth-sub">{authMode === 'login' ? 'Entra con tus credenciales' : 'Completa tu perfil para continuar'}</p>
+          <h1 className="auth-title">
+            {authMode === 'login' ? 'Bienvenida' : authMode === 'register' ? 'Crear cuenta' : 'Recuperar contraseña'}
+          </h1>
+          <p className="auth-sub">
+            {authMode === 'login' ? 'Entra con tus credenciales' : authMode === 'register' ? 'Completa tu perfil para continuar' : 'Te enviaremos un link a tu correo'}
+          </p>
           {authMode === 'register' && (
             <>
               <label className="auth-label">Nombre completo</label>
@@ -760,17 +776,32 @@ export default function Platform() {
           )}
           <label className="auth-label">Email</label>
           <input className="auth-input" type="email" placeholder="tu@email.com" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAuth()}/>
-          <label className="auth-label">Contraseña</label>
-          <input className="auth-input" type="password" placeholder="••••••••" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAuth()}/>
+          {authMode !== 'forgot' && (
+            <>
+              <label className="auth-label">Contraseña</label>
+              <input className="auth-input" type="password" placeholder="••••••••" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAuth()}/>
+            </>
+          )}
+          {authMode === 'login' && (
+            <p className="auth-forgot">
+              <button onClick={() => { setAuthMode('forgot'); setAuthError(''); setAuthSuccess('') }}>
+                ¿Olvidaste tu contraseña?
+              </button>
+            </p>
+          )}
           <button className="auth-btn" onClick={handleAuth} disabled={authLoading}>
-            {authLoading ? 'Cargando...' : authMode === 'login' ? 'Entrar' : 'Crear cuenta'}
+            {authLoading ? 'Cargando...' : authMode === 'login' ? 'Entrar' : authMode === 'register' ? 'Crear cuenta' : 'Enviar link de recuperación'}
           </button>
-          {authError && <p className="auth-error">{authError}</p>}
+          {authError   && <p className="auth-error">{authError}</p>}
+          {authSuccess && <p className="auth-success">{authSuccess}</p>}
           <p className="auth-toggle">
-            {authMode === 'login' ? '¿No tienes cuenta? ' : '¿Ya tienes cuenta? '}
-            <button onClick={() => { setAuthMode(authMode==='login'?'register':'login'); setAuthError('') }}>
-              {authMode === 'login' ? 'Regístrate' : 'Inicia sesión'}
-            </button>
+            {authMode === 'forgot' ? (
+              <button onClick={() => { setAuthMode('login'); setAuthError(''); setAuthSuccess('') }}>← Volver al login</button>
+            ) : authMode === 'login' ? (
+              <>¿No tienes cuenta? <button onClick={() => { setAuthMode('register'); setAuthError(''); setAuthSuccess('') }}>Regístrate</button></>
+            ) : (
+              <>¿Ya tienes cuenta? <button onClick={() => { setAuthMode('login'); setAuthError(''); setAuthSuccess('') }}>Inicia sesión</button></>
+            )}
           </p>
         </div>
       </div>
