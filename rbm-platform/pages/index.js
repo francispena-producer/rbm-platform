@@ -84,38 +84,11 @@ const css = `
   .sidebar-user-out{background:none;border:none;font-size:11px;color:var(--muted);margin-top:8px;padding:0;display:block}
   .sidebar-user-out:hover{color:var(--text)}
 
-  .main{margin-left:220px;flex:1;min-height:100vh;display:flex;flex-direction:column}
+  .main{margin-left:220px;flex:1;min-height:100vh}
   .topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:5}
   .topbar-title{font-size:16px;font-weight:600;letter-spacing:-.02em}
   .topbar-meta{display:flex;align-items:center;gap:10px}
-
-  .content-area{display:flex;flex:1;min-height:0}
-  .page{padding:28px;flex:1;overflow-y:auto}
-
-  /* ── TODOS PANEL ── */
-  .todos-panel{width:300px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:57px;height:calc(100vh - 57px);overflow:hidden}
-  .todos-header{padding:16px 16px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
-  .todos-title{font-size:10px;font-family:'DM Mono',monospace;color:var(--accent);text-transform:uppercase;letter-spacing:.15em;display:block;margin-bottom:4px}
-  .todos-counts{display:flex;gap:8px;align-items:center}
-  .todos-count-chip{font-size:10px;font-family:'DM Mono',monospace;padding:2px 8px;border-radius:10px}
-  .todos-list{flex:1;overflow-y:auto;padding:10px 12px}
-  .todo-group{margin-bottom:16px}
-  .todo-group-label{font-size:9px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;display:flex;align-items:center;gap:6px}
-  .todo-group-dot{width:5px;height:5px;border-radius:50%}
-  .todo-item{display:flex;align-items:flex-start;gap:8px;padding:7px 8px;border-radius:5px;transition:background .15s;margin-bottom:3px}
-  .todo-item:hover{background:var(--surface2)}
-  .todo-check{width:16px;height:16px;border-radius:4px;border:1px solid var(--border2);background:transparent;flex-shrink:0;margin-top:1px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;font-size:9px;color:transparent}
-  .todo-check.done{background:var(--accent);border-color:var(--accent);color:#000}
-  .todo-check:hover:not(.done){border-color:var(--accent)}
-  .todo-text{font-size:11px;color:var(--text);line-height:1.5;flex:1}
-  .todo-text.done{color:var(--muted);text-decoration:line-through}
-  .todo-area-tag{font-size:9px;font-family:'DM Mono',monospace;padding:1px 6px;border-radius:3px;flex-shrink:0;margin-top:2px}
-  .todos-empty{text-align:center;padding:32px 16px;color:var(--muted);font-size:12px}
-  .todos-add{padding:10px 12px;border-top:1px solid var(--border);flex-shrink:0}
-  .todos-add-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;color:var(--text);font-size:12px;margin-bottom:6px}
-  .todos-add-input:focus{outline:none;border-color:var(--accent)}
-  .todos-add-btn{width:100%;background:var(--accent-dim);color:var(--accent);border:1px solid rgba(200,241,53,.2);border-radius:5px;padding:7px;font-size:11px;font-family:'DM Mono',monospace;letter-spacing:.05em;transition:all .15s}
-  .todos-add-btn:hover{background:rgba(200,241,53,.15)}
+  .page{padding:28px}
 
   /* ── DASHBOARD ── */
   .dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:4px}
@@ -339,8 +312,6 @@ export default function Platform() {
   const [members, setMembers]     = useState([])
   const [snapshots, setSnapshots] = useState([])
   const [projNotes, setProjNotes] = useState({ notas:'', fecha:'', ronda:'' })
-  const [todos, setTodos]         = useState([])
-  const [newTodoText, setNewTodoText] = useState('')
   const [openCards, setOpenCards] = useState({})
   const [openHist, setOpenHist]   = useState({})
   const [openSnaps, setOpenSnaps] = useState({})
@@ -435,7 +406,6 @@ export default function Platform() {
     setVisibility({})
     setMembers([])
     setSnapshots([])
-    setTodos([])
     setActiveProject(proj)
     setView('project')
     setFilter('all')
@@ -445,50 +415,7 @@ export default function Platform() {
       loadMembers(proj.id),
       loadSnapshots(proj.id),
       loadProjNotes(proj.id),
-      loadTodos(proj.id),
     ])
-  }
-
-  async function loadTodos(projectId) {
-    const { data } = await supabase.from('todos').select('*').eq('project_id', projectId).order('created_at')
-    if (data) setTodos(data)
-  }
-
-  async function toggleTodo(todoId) {
-    if (!canManage) return
-    const todo = todos.find(t => t.id === todoId)
-    const next = !todo.completed
-    setTodos(t => t.map(td => td.id === todoId ? { ...td, completed: next, completed_at: next ? new Date().toISOString() : null } : td))
-    await supabase.from('todos').update({ completed: next, completed_at: next ? new Date().toISOString() : null }).eq('id', todoId)
-  }
-
-  async function addManualTodo() {
-    if (!newTodoText.trim() || !canManage) return
-    const { data } = await supabase.from('todos').insert({
-      project_id: activeProject.id,
-      text: newTodoText.trim(),
-      piece_name: 'General',
-      area: 'general',
-    }).select().single()
-    if (data) setTodos(t => [...t, data])
-    setNewTodoText('')
-  }
-
-  async function syncTodosFromFeedback(pieceId, pieceName, area, items) {
-    // Get existing todos for this piece+area
-    const existing = todos.filter(t => t.piece_id === pieceId && t.area === area)
-    const existingTexts = existing.map(t => t.text)
-    const newItems = items.filter(i => i.text.trim() && !existingTexts.includes(i.text.trim()))
-    if (!newItems.length) return
-    const inserts = newItems.map(i => ({
-      project_id: activeProject.id,
-      piece_id: pieceId,
-      piece_name: pieceName,
-      area,
-      text: i.text.trim(),
-    }))
-    const { data } = await supabase.from('todos').insert(inserts).select()
-    if (data) setTodos(t => [...t, ...data])
   }
 
   async function loadPieces(projectId) {
@@ -619,12 +546,6 @@ export default function Platform() {
     const current = feedbackToItems(feedback[pieceId]?.[area]?.feedback || '')
     current[idx] = { ...current[idx], text: value }
     updateFeedback(pieceId, area, 'feedback', itemsToFeedback(current))
-    // Sync to todos after a short delay
-    clearTimeout(window._todoSyncTimer)
-    window._todoSyncTimer = setTimeout(() => {
-      const piece = pieces.find(p => p.id === pieceId)
-      if (piece && activeProject) syncTodosFromFeedback(pieceId, piece.name, area, current.map((c,i) => i === idx ? {...c, text: value} : c))
-    }, 1500)
   }
 
   function deleteComment(pieceId, area, idx) {
@@ -923,94 +844,7 @@ export default function Platform() {
     )
   }
 
-  // ── TODOS PANEL ──────────────────────────────────────────────
-  function TodosPanel() {
-    const areaColors2 = { edit:'#a78bfa', color:'#f472b6', audio:'#34d399', online:'#fbbf24', vfx:'#f97316', general:'#60a5fa' }
-    const areaLabels2 = { edit:'Edición', color:'Color', audio:'Audio', online:'Online', vfx:'VFX', general:'General' }
-    const pending   = todos.filter(t => !t.completed)
-    const completed = todos.filter(t => t.completed)
-
-    // Group pending by piece
-    const groups = {}
-    pending.forEach(t => {
-      const key = t.piece_name || 'General'
-      if (!groups[key]) groups[key] = []
-      groups[key].push(t)
-    })
-
-    return (
-      <div className="todos-panel">
-        <div className="todos-header">
-          <span className="todos-title">Pendientes</span>
-          <div className="todos-counts">
-            <span className="todos-count-chip" style={{background:'rgba(251,146,60,.1)',color:'#fb923c'}}>
-              {pending.length} pendientes
-            </span>
-            <span className="todos-count-chip" style={{background:'rgba(74,222,128,.1)',color:'#4ade80'}}>
-              {completed.length} listos
-            </span>
-          </div>
-        </div>
-
-        <div className="todos-list">
-          {pending.length === 0 && completed.length === 0 && (
-            <div className="todos-empty">
-              <p>Sin pendientes aún.</p>
-              <p style={{marginTop:'6px',fontSize:'11px'}}>Los comentarios de feedback aparecerán aquí automáticamente.</p>
-            </div>
-          )}
-
-          {Object.entries(groups).map(([pieceName, items]) => (
-            <div key={pieceName} className="todo-group">
-              <span className="todo-group-label">
-                <span className="todo-group-dot" style={{background:'var(--accent)'}}/>
-                {pieceName}
-              </span>
-              {items.map(todo => (
-                <div key={todo.id} className="todo-item">
-                  <div className={`todo-check ${todo.completed?'done':''}`}
-                    onClick={() => toggleTodo(todo.id)}
-                    style={{cursor: canManage ? 'pointer' : 'default'}}>
-                    {todo.completed && '✓'}
-                  </div>
-                  <span className={`todo-text ${todo.completed?'done':''}`}>{todo.text}</span>
-                  {todo.area && todo.area !== 'general' && (
-                    <span className="todo-area-tag" style={{background:`${areaColors2[todo.area]}15`,color:areaColors2[todo.area]}}>
-                      {areaLabels2[todo.area]||todo.area}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          ))}
-
-          {completed.length > 0 && (
-            <div className="todo-group">
-              <span className="todo-group-label" style={{color:'#333'}}>
-                <span className="todo-group-dot" style={{background:'#4ade80'}}/>
-                Completados
-              </span>
-              {completed.map(todo => (
-                <div key={todo.id} className="todo-item">
-                  <div className="todo-check done" onClick={() => toggleTodo(todo.id)} style={{cursor: canManage?'pointer':'default'}}>✓</div>
-                  <span className="todo-text done">{todo.text}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {canManage && (
-          <div className="todos-add">
-            <input className="todos-add-input" placeholder="Agregar pendiente manual..."
-              value={newTodoText} onChange={e=>setNewTodoText(e.target.value)}
-              onKeyDown={e=>e.key==='Enter'&&addManualTodo()}/>
-            <button className="todos-add-btn" onClick={addManualTodo}>+ Agregar pendiente</button>
-          </div>
-        )}
-      </div>
-    )
-  }
+  const STATUS_OPTIONS = { pendiente:'cambios', cambios:'aprobado', aprobado:'pendiente' }
 
   // ── AUTH SCREEN ──────────────────────────────────────────────
   if (!user) return (
@@ -1119,8 +953,7 @@ export default function Platform() {
             </div>
           </div>
 
-          <div className="content-area">
-            <div className="page">
+          <div className="page">
 
             {/* DASHBOARD */}
             {view === 'dashboard' && (
@@ -1264,9 +1097,7 @@ export default function Platform() {
                 )}
               </>
             )}
-            </div>{/* end page */}
-            {view === 'project' && activeProject && <TodosPanel />}
-          </div>{/* end content-area */}
+          </div>
         </div>
       </div>
 
