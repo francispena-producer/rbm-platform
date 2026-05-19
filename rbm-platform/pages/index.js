@@ -768,14 +768,16 @@ export default function Platform() {
                                       value={af.feedback||''}
                                       onChange={e=>{
                                         const val=e.target.value
-                                        setFb(f=>({...f,[pid]:{...f[pid],[a.key]:{...(f[pid]?.[a.key]||{status:'pendiente',sources:[]}),feedback:val}}}))
+                                        const pieceId=piece.id
+                                        const areaKey=a.key
+                                        setFb(f=>({...f,[pieceId]:{...f[pieceId],[areaKey]:{...(f[pieceId]?.[areaKey]||{status:'pendiente',sources:[]}),feedback:val}}}))
                                         setSv('saving')
                                         clearTimeout(window._st)
                                         window._st=setTimeout(async()=>{
-                                          const cur2=fb[pid]?.[a.key]||{status:'pendiente',sources:[]}
-                                          const {data:ex}=await supabase.from('piece_feedback').select('id').eq('piece_id',pid).eq('area',a.key).single()
+                                          const cur2=fb[pieceId]?.[areaKey]||{status:'pendiente',sources:[]}
+                                          const {data:ex}=await supabase.from('piece_feedback').select('id').eq('piece_id',pieceId).eq('area',areaKey).single()
                                           if(ex?.id) await supabase.from('piece_feedback').update({feedback:val,status:cur2.status,sources:cur2.sources}).eq('id',ex.id)
-                                          else await supabase.from('piece_feedback').insert({piece_id:pid,area:a.key,feedback:val,status:'pendiente',sources:[]})
+                                          else await supabase.from('piece_feedback').insert({piece_id:pieceId,area:areaKey,feedback:val,status:'pendiente',sources:[]})
                                           setSv('saved'); setTimeout(()=>setSv('idle'),2000)
                                         },1000)
                                       }}
