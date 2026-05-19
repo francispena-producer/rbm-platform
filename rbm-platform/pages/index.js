@@ -397,7 +397,13 @@ export default function Platform() {
     setSv('saving')
     clearTimeout(window._st)
     window._st=setTimeout(async()=>{
-      await supabase.from('piece_feedback').upsert({piece_id:pid,area,feedback:upd.feedback,status:upd.status,sources:upd.sources},{onConflict:'piece_id,area'})
+      // Check if record exists
+      const {data:existing}=await supabase.from('piece_feedback').select('id').eq('piece_id',pid).eq('area',area).single()
+      if(existing?.id) {
+        await supabase.from('piece_feedback').update({feedback:upd.feedback,status:upd.status,sources:upd.sources,updated_at:new Date().toISOString()}).eq('id',existing.id)
+      } else {
+        await supabase.from('piece_feedback').insert({piece_id:pid,area,feedback:upd.feedback,status:upd.status,sources:upd.sources})
+      }
       setSv('saved'); setTimeout(()=>setSv('idle'),2000)
     },1000)
   }
