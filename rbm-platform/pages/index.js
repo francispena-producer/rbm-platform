@@ -699,6 +699,66 @@ export default function Platform() {
   const counts = { pendiente: 0, cambios: 0, aprobado: 0 }
   visiblePieces.forEach(p => { counts[p.status]++ })
 
+  // ── AUTH SCREEN — must be before inner components ─────────────
+  if (!user) return (
+    <>
+      <Head><title>Roundtable</title><style>{css}</style></Head>
+      <div className="auth-wrap">
+        <div className="auth-box">
+          <p className="auth-logo">Roundtable</p>
+          <h1 className="auth-title">
+            {authMode === 'login' ? 'Bienvenida' : authMode === 'register' ? 'Crear cuenta' : 'Recuperar contraseña'}
+          </h1>
+          <p className="auth-sub">
+            {authMode === 'login' ? 'Entra con tus credenciales' : authMode === 'register' ? 'Completa tu perfil para continuar' : 'Te enviaremos un link a tu correo'}
+          </p>
+          {authMode === 'register' && (
+            <>
+              <label className="auth-label">Nombre completo</label>
+              <input className="auth-input" type="text" placeholder="Tu nombre" value={name} onChange={e=>setName(e.target.value)}/>
+              <label className="auth-label">Rol</label>
+              <select className="auth-input" value={role} onChange={e=>setRole(e.target.value)} style={{cursor:'pointer'}}>
+                <option value="productor">Productor</option>
+                <option value="agencia">Agencia</option>
+                <option value="marca">Marca</option>
+                <option value="casa_productora">Casa Productora</option>
+              </select>
+            </>
+          )}
+          <label className="auth-label">Email</label>
+          <input className="auth-input" type="email" placeholder="tu@email.com" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAuth()}/>
+          {authMode !== 'forgot' && (
+            <>
+              <label className="auth-label">Contraseña</label>
+              <input className="auth-input" type="password" placeholder="••••••••" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAuth()}/>
+            </>
+          )}
+          {authMode === 'login' && (
+            <p className="auth-forgot">
+              <button onClick={() => { setAuthMode('forgot'); setAuthError(''); setAuthSuccess('') }}>
+                ¿Olvidaste tu contraseña?
+              </button>
+            </p>
+          )}
+          <button className="auth-btn" onClick={handleAuth} disabled={authLoading}>
+            {authLoading ? 'Cargando...' : authMode === 'login' ? 'Entrar' : authMode === 'register' ? 'Crear cuenta' : 'Enviar link de recuperación'}
+          </button>
+          {authError   && <p className="auth-error">{authError}</p>}
+          {authSuccess && <p className="auth-success">{authSuccess}</p>}
+          <p className="auth-toggle">
+            {authMode === 'forgot' ? (
+              <button onClick={() => { setAuthMode('login'); setAuthError(''); setAuthSuccess('') }}>← Volver al login</button>
+            ) : authMode === 'login' ? (
+              <>¿No tienes cuenta? <button onClick={() => { setAuthMode('register'); setAuthError(''); setAuthSuccess('') }}>Regístrate</button></>
+            ) : (
+              <>¿Ya tienes cuenta? <button onClick={() => { setAuthMode('login'); setAuthError(''); setAuthSuccess('') }}>Inicia sesión</button></>
+            )}
+          </p>
+        </div>
+      </div>
+    </>
+  )
+
   // ── THERMOMETER ──────────────────────────────────────────────
   function Thermometer({ pieceId }) {
     const stateColors = { idle:'#2e2e2e', review:'#60a5fa', adjust:'#fb923c', approved:'#4ade80', received:'#a78bfa', wip:'#fbbf24', delivered:'#4ade80' }
@@ -1014,70 +1074,10 @@ export default function Platform() {
     )
   }
 
-  // ── AUTH SCREEN ──────────────────────────────────────────────
-  if (!user) return (
-    <>
-      <Head><title>Production Platform</title><style>{css}</style></Head>
-      <div className="auth-wrap">
-        <div className="auth-box">
-          <p className="auth-logo">Production Platform</p>
-          <h1 className="auth-title">
-            {authMode === 'login' ? 'Bienvenida' : authMode === 'register' ? 'Crear cuenta' : 'Recuperar contraseña'}
-          </h1>
-          <p className="auth-sub">
-            {authMode === 'login' ? 'Entra con tus credenciales' : authMode === 'register' ? 'Completa tu perfil para continuar' : 'Te enviaremos un link a tu correo'}
-          </p>
-          {authMode === 'register' && (
-            <>
-              <label className="auth-label">Nombre completo</label>
-              <input className="auth-input" type="text" placeholder="Tu nombre" value={name} onChange={e=>setName(e.target.value)}/>
-              <label className="auth-label">Rol</label>
-              <select className="auth-input" value={role} onChange={e=>setRole(e.target.value)} style={{cursor:'pointer'}}>
-                <option value="productor">Productor</option>
-                <option value="agencia">Agencia</option>
-                <option value="marca">Marca</option>
-                <option value="casa_productora">Casa Productora</option>
-              </select>
-            </>
-          )}
-          <label className="auth-label">Email</label>
-          <input className="auth-input" type="email" placeholder="tu@email.com" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAuth()}/>
-          {authMode !== 'forgot' && (
-            <>
-              <label className="auth-label">Contraseña</label>
-              <input className="auth-input" type="password" placeholder="••••••••" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAuth()}/>
-            </>
-          )}
-          {authMode === 'login' && (
-            <p className="auth-forgot">
-              <button onClick={() => { setAuthMode('forgot'); setAuthError(''); setAuthSuccess('') }}>
-                ¿Olvidaste tu contraseña?
-              </button>
-            </p>
-          )}
-          <button className="auth-btn" onClick={handleAuth} disabled={authLoading}>
-            {authLoading ? 'Cargando...' : authMode === 'login' ? 'Entrar' : authMode === 'register' ? 'Crear cuenta' : 'Enviar link de recuperación'}
-          </button>
-          {authError   && <p className="auth-error">{authError}</p>}
-          {authSuccess && <p className="auth-success">{authSuccess}</p>}
-          <p className="auth-toggle">
-            {authMode === 'forgot' ? (
-              <button onClick={() => { setAuthMode('login'); setAuthError(''); setAuthSuccess('') }}>← Volver al login</button>
-            ) : authMode === 'login' ? (
-              <>¿No tienes cuenta? <button onClick={() => { setAuthMode('register'); setAuthError(''); setAuthSuccess('') }}>Regístrate</button></>
-            ) : (
-              <>¿Ya tienes cuenta? <button onClick={() => { setAuthMode('login'); setAuthError(''); setAuthSuccess('') }}>Inicia sesión</button></>
-            )}
-          </p>
-        </div>
-      </div>
-    </>
-  )
-
   // ── APP ──────────────────────────────────────────────────────
   return (
     <>
-      <Head><title>Production Platform</title><style>{css}</style></Head>
+      <Head><title>Roundtable</title><style>{css}</style></Head>
       <div className="shell">
 
         {/* SIDEBAR */}
