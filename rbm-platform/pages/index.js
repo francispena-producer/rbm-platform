@@ -1,757 +1,534 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import Head from 'next/head'
 import { supabase } from '../lib/supabase'
 
-// ── CONSTANTS ─────────────────────────────────────────────────
 const ROLES = {
-  productor:       { label:'Productor',       color:'#c8f135', canEdit:true,  canShare:true,  canManage:true  },
-  agencia:         { label:'Agencia',         color:'#60a5fa', canEdit:true,  canShare:true,  canManage:false },
-  marca:           { label:'Marca',           color:'#e879f9', canEdit:false, canShare:false, canManage:false },
-  casa_productora: { label:'Casa Productora', color:'#4ade80', canEdit:false, canShare:false, canManage:false },
+  productor:       { label:'Productor',       color:'#c8f135' },
+  agencia:         { label:'Agencia',         color:'#60a5fa' },
+  marca:           { label:'Marca',           color:'#e879f9' },
+  casa_productora: { label:'Casa Productora', color:'#4ade80' },
 }
-
 const AREAS = [
-  { key:'edit',   label:'Edición',            color:'#a78bfa', placeholder:'Ajustes de corte, ritmo, narrativa...' },
-  { key:'color',  label:'Color',              color:'#f472b6', placeholder:'Exposición, contraste, grading...' },
-  { key:'audio',  label:'Audio',              color:'#34d399', placeholder:'Música, efectos, mezcla...' },
-  { key:'online', label:'Online / Gráficos',  color:'#fbbf24', placeholder:'UI bubbles, end cards, logos...' },
-  { key:'vfx',    label:'VFX',               color:'#f97316', placeholder:'Efectos visuales, compositing...' },
+  { key:'edit',   label:'Edición',           color:'#a78bfa', placeholder:'Ajustes de corte, ritmo, narrativa...' },
+  { key:'color',  label:'Color',             color:'#f472b6', placeholder:'Exposición, contraste, grading...' },
+  { key:'audio',  label:'Audio',             color:'#34d399', placeholder:'Música, efectos, mezcla...' },
+  { key:'online', label:'Online / Gráficos', color:'#fbbf24', placeholder:'UI bubbles, end cards, logos...' },
 ]
-
 const APPROVAL_ROLES = [
   { key:'meta',  label:'Meta',  color:'#e879f9', states:['idle','review','adjust','approved'], icons:{idle:'MT',review:'…',adjust:'!',approved:'✓'}, labels:{idle:'Sin revisar',review:'En revisión',adjust:'Ajustes',approved:'Aprobado'} },
   { key:'gut',   label:'Gut',   color:'#60a5fa', states:['idle','review','adjust','approved'], icons:{idle:'GT',review:'…',adjust:'!',approved:'✓'}, labels:{idle:'Sin revisar',review:'En revisión',adjust:'Ajustes',approved:'Aprobado'} },
   { key:'primo', label:'Primo', color:'#4ade80', states:['idle','received','wip','delivered'],  icons:{idle:'PR',received:'↓',wip:'⚙',delivered:'✓'}, labels:{idle:'Sin recibir',received:'Recibido',wip:'En proceso',delivered:'Entregados'} },
 ]
+const SOURCES     = [{key:'meta',label:'Meta',color:'#e879f9'},{key:'gut',label:'Gut',color:'#60a5fa'},{key:'primo',label:'Primo',color:'#4ade80'}]
+const SC          = {pendiente:'#60a5fa',cambios:'#fb923c',aprobado:'#4ade80'}
+const SL          = {pendiente:'En revisión',cambios:'Con ajustes',aprobado:'Aprobado'}
+const SCYCLE      = {pendiente:'cambios',cambios:'aprobado',aprobado:'pendiente'}
+const ACOL        = {edit:'#a78bfa',color:'#f472b6',audio:'#34d399',online:'#fbbf24',vfx:'#f97316',general:'#60a5fa'}
+const ALBL        = {edit:'Edición',color:'Color',audio:'Audio',online:'Online',vfx:'VFX',general:'General'}
 
-const SOURCE_OPTIONS = [
-  { key:'meta',  label:'Meta',  color:'#e879f9' },
-  { key:'gut',   label:'Gut',   color:'#60a5fa' },
-  { key:'primo', label:'Primo', color:'#4ade80' },
-]
-
-const STATUS_COLORS = { pendiente:'#60a5fa', cambios:'#fb923c', aprobado:'#4ade80' }
-const STATUS_LABELS = { pendiente:'En revisión', cambios:'Con ajustes', aprobado:'Aprobado' }
-const STATUS_OPTIONS = { pendiente:'cambios', cambios:'aprobado', aprobado:'pendiente' }
-
-// ── CSS ───────────────────────────────────────────────────────
 const css = `
-  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap');
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-  :root{
-    --bg:#0a0a0a;--surface:#141414;--surface2:#1a1a1a;--surface3:#202020;
-    --border:#252525;--border2:#303030;
-    --accent:#c8f135;--accent-dim:rgba(200,241,53,0.1);
-    --text:#eaeaea;--muted:#4a4a4a;--mid:#777;
-  }
-  body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
-  input,textarea,select,button{font-family:inherit}
-  textarea{resize:vertical}
-  button{cursor:pointer}
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0a0a0a;--sf:#141414;--s2:#1a1a1a;--bd:#252525;--b2:#303030;--ac:#c8f135;--ad:rgba(200,241,53,0.1);--tx:#eaeaea;--mu:#4a4a4a;--mi:#777}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--tx);min-height:100vh}
+input,textarea,select,button{font-family:inherit}
+textarea{resize:vertical}
+button{cursor:pointer}
+.aw{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.ab{background:var(--sf);border:1px solid var(--bd);border-radius:16px;padding:44px 40px;width:380px}
+.alo{font-size:10px;font-family:'DM Mono',monospace;color:var(--ac);letter-spacing:.18em;text-transform:uppercase;margin-bottom:8px}
+.ati{font-size:22px;font-weight:700;letter-spacing:-.03em;margin-bottom:6px}
+.asu{font-size:13px;color:var(--mi);margin-bottom:28px}
+.al{font-size:10px;font-family:'DM Mono',monospace;color:var(--mu);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:6px}
+.ai{width:100%;background:var(--s2);border:1px solid var(--b2);border-radius:8px;padding:11px 14px;color:var(--tx);font-size:14px;margin-bottom:14px}
+.ai:focus{outline:none;border-color:var(--ac)}
+.abtn{width:100%;background:var(--ac);color:#000;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:700;margin-top:4px}
+.abtn:hover{opacity:.9}
+.aerr{font-size:12px;color:#f87171;margin-top:10px;text-align:center}
+.aok{font-size:12px;color:#4ade80;margin-top:10px;text-align:center}
+.afg{font-size:11px;text-align:right;margin-top:-8px;margin-bottom:12px}
+.afg button,.atg button{background:none;border:none;color:var(--ac);font-size:11px;text-decoration:underline;padding:0}
+.atg{font-size:12px;color:var(--mi);text-align:center;margin-top:16px}
 
-  /* ── AUTH ── */
-  .auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-  .auth-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:44px 40px;width:380px}
-  .auth-logo{font-size:10px;font-family:'DM Mono',monospace;color:var(--accent);letter-spacing:.18em;text-transform:uppercase;margin-bottom:8px}
-  .auth-title{font-size:22px;font-weight:700;letter-spacing:-.03em;margin-bottom:6px}
-  .auth-sub{font-size:13px;color:var(--mid);margin-bottom:28px}
-  .auth-label{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:6px}
-  .auth-input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:11px 14px;color:var(--text);font-size:14px;margin-bottom:14px;transition:border-color .15s}
-  .auth-input:focus{outline:none;border-color:var(--accent)}
-  .auth-btn{width:100%;background:var(--accent);color:#000;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:700;margin-top:4px}
-  .auth-btn:hover{opacity:.9}
-  .auth-error{font-size:12px;color:#f87171;margin-top:10px;text-align:center}
-  .auth-forgot{font-size:11px;color:var(--muted);text-align:right;margin-top:-8px;margin-bottom:12px}
-  .auth-forgot button{background:none;border:none;color:var(--mid);font-size:11px;text-decoration:underline;padding:0}
-  .auth-forgot button:hover{color:var(--text)}
-  .auth-success{font-size:12px;color:#4ade80;margin-top:10px;text-align:center}
-  .auth-toggle{font-size:12px;color:var(--mid);text-align:center;margin-top:16px}
-  .auth-toggle button{background:none;border:none;color:var(--accent);font-size:12px;text-decoration:underline;padding:0}
+.shell{display:flex;min-height:100vh}
+.sb{width:220px;background:var(--sf);border-right:1px solid var(--bd);display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;height:100vh;z-index:10}
+.sb-logo{padding:20px 18px;border-bottom:1px solid var(--bd)}
+.sb-tag{font-size:9px;font-family:'DM Mono',monospace;color:var(--ac);letter-spacing:.15em;text-transform:uppercase}
+.sb-nm{font-size:15px;font-weight:700;letter-spacing:-.02em;margin-top:2px}
+.sb-nav{flex:1;padding:12px 8px;overflow-y:auto}
+.sb-sec{font-size:9px;font-family:'DM Mono',monospace;color:var(--mu);text-transform:uppercase;letter-spacing:.12em;padding:8px 10px 6px}
+.ni{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;font-size:13px;color:var(--mi);transition:all .15s;border:none;background:none;width:100%;text-align:left}
+.ni:hover{background:var(--s2);color:var(--tx)}
+.ni.active{background:var(--ad);color:var(--ac)}
+.nd{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.sb-u{padding:14px 18px;border-top:1px solid var(--bd)}
+.sb-un{font-size:13px;font-weight:500}
+.sb-ur{font-size:10px;font-family:'DM Mono',monospace;margin-top:2px}
+.sb-out{background:none;border:none;font-size:11px;color:var(--mu);margin-top:8px;padding:0;display:block}
+.sb-out:hover{color:var(--tx)}
 
-  /* ── APP SHELL ── */
-  .shell{display:flex;min-height:100vh}
-  .sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;height:100vh;z-index:10}
-  .sidebar-logo{padding:20px 18px;border-bottom:1px solid var(--border)}
-  .sidebar-logo-tag{font-size:9px;font-family:'DM Mono',monospace;color:var(--accent);letter-spacing:.15em;text-transform:uppercase}
-  .sidebar-logo-name{font-size:15px;font-weight:700;letter-spacing:-.02em;margin-top:2px}
-  .sidebar-nav{flex:1;padding:12px 8px;overflow-y:auto}
-  .sidebar-section{font-size:9px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;padding:8px 10px 6px}
-  .nav-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;font-size:13px;color:var(--mid);cursor:pointer;transition:all .15s;border:none;background:none;width:100%;text-align:left}
-  .nav-item:hover{background:var(--surface2);color:var(--text)}
-  .nav-item.active{background:var(--accent-dim);color:var(--accent)}
-  .nav-item-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-  .sidebar-user{padding:14px 18px;border-top:1px solid var(--border)}
-  .sidebar-user-name{font-size:13px;font-weight:500}
-  .sidebar-user-role{font-size:10px;font-family:'DM Mono',monospace;margin-top:2px}
-  .sidebar-user-out{background:none;border:none;font-size:11px;color:var(--muted);margin-top:8px;padding:0;display:block}
-  .sidebar-user-out:hover{color:var(--text)}
+.main{margin-left:220px;flex:1;min-height:100vh;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;border-bottom:1px solid var(--bd);background:var(--sf);position:sticky;top:0;z-index:5}
+.tt{font-size:16px;font-weight:600;letter-spacing:-.02em}
+.tm{display:flex;align-items:center;gap:10px}
+.ca{display:flex;flex:1;min-height:0}
+.page{padding:28px;flex:1;overflow-y:auto;max-height:calc(100vh - 57px)}
 
-  .main{margin-left:220px;flex:1;min-height:100vh;display:flex;flex-direction:column}
-  .topbar{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:5}
-  .topbar-title{font-size:16px;font-weight:600;letter-spacing:-.02em}
-  .topbar-meta{display:flex;align-items:center;gap:10px}
+.dg{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:4px}
+.pc{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:20px;cursor:pointer;transition:all .2s}
+.pc:hover{border-color:var(--b2);transform:translateY(-1px)}
+.pct{font-size:9px;font-family:'DM Mono',monospace;color:var(--ac);letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px}
+.pcn{font-size:16px;font-weight:600;letter-spacing:-.02em;margin-bottom:4px}
+.pcc{font-size:12px;color:var(--mi);margin-bottom:8px}
+.np{background:transparent;border:1px dashed var(--b2);border-radius:10px;padding:20px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:120px;transition:all .2s;color:var(--mu)}
+.np:hover{border-color:var(--ac);color:var(--ac)}
 
-  .content-area{display:flex;flex:1;min-height:0}
-  .page{padding:28px;flex:1;overflow-y:auto}
+.ph{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:16px}
+.phl h1{font-size:20px;font-weight:700;letter-spacing:-.03em}
+.phl p{font-size:13px;color:var(--mi);margin-top:3px}
+.phr{display:flex;align-items:center;gap:8px;flex-shrink:0}
 
-  /* ── TODOS PANEL ── */
-  .todos-panel{width:300px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:57px;height:calc(100vh - 57px);overflow:hidden}
-  .todos-header{padding:16px 16px 12px;border-bottom:1px solid var(--border);flex-shrink:0}
-  .todos-title{font-size:10px;font-family:'DM Mono',monospace;color:var(--accent);text-transform:uppercase;letter-spacing:.15em;display:block;margin-bottom:4px}
-  .todos-counts{display:flex;gap:8px;align-items:center}
-  .todos-count-chip{font-size:10px;font-family:'DM Mono',monospace;padding:2px 8px;border-radius:10px}
-  .todos-list{flex:1;overflow-y:auto;padding:10px 12px}
-  .todo-group{margin-bottom:16px}
-  .todo-group-label{font-size:9px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;display:flex;align-items:center;gap:6px}
-  .todo-group-dot{width:5px;height:5px;border-radius:50%}
-  .todo-item{display:flex;align-items:flex-start;gap:8px;padding:7px 8px;border-radius:5px;transition:background .15s;margin-bottom:3px}
-  .todo-item:hover{background:var(--surface2)}
-  .todo-check{width:16px;height:16px;border-radius:4px;border:1px solid var(--border2);background:transparent;flex-shrink:0;margin-top:1px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;font-size:9px;color:transparent}
-  .todo-check.done{background:var(--accent);border-color:var(--accent);color:#000}
-  .todo-check:hover:not(.done){border-color:var(--accent)}
-  .todo-text{font-size:11px;color:var(--text);line-height:1.5;flex:1}
-  .todo-text.done{color:var(--muted);text-decoration:line-through}
-  .todo-area-tag{font-size:9px;font-family:'DM Mono',monospace;padding:1px 6px;border-radius:3px;flex-shrink:0;margin-top:2px}
-  .todos-empty{text-align:center;padding:32px 16px;color:var(--muted);font-size:12px}
-  .todos-add{padding:10px 12px;border-top:1px solid var(--border);flex-shrink:0}
-  .todos-add-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:7px 10px;color:var(--text);font-size:12px;margin-bottom:6px}
-  .todos-add-input:focus{outline:none;border-color:var(--accent)}
-  .todos-add-btn{width:100%;background:var(--accent-dim);color:var(--accent);border:1px solid rgba(200,241,53,.2);border-radius:5px;padding:7px;font-size:11px;font-family:'DM Mono',monospace;letter-spacing:.05em;transition:all .15s}
-  .todos-add-btn:hover{background:rgba(200,241,53,.15)}
+.sr{display:flex;gap:8px;margin-bottom:20px}
+.sch{display:flex;flex-direction:column;align-items:center;padding:10px 18px;background:var(--sf);border:1px solid var(--bd);border-radius:8px;gap:3px}
+.scn{font-family:'DM Mono',monospace;font-size:18px;font-weight:500}
+.scl{font-size:9px;font-family:'DM Mono',monospace;color:var(--mu);text-transform:uppercase;letter-spacing:.08em}
 
-  /* ── DASHBOARD ── */
-  .dash-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:4px}
-  .proj-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;cursor:pointer;transition:all .2s}
-  .proj-card:hover{border-color:var(--border2);transform:translateY(-1px)}
-  .proj-card-tag{font-size:9px;font-family:'DM Mono',monospace;color:var(--accent);letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px}
-  .proj-card-name{font-size:16px;font-weight:600;letter-spacing:-.02em;margin-bottom:4px}
-  .proj-card-client{font-size:12px;color:var(--mid);margin-bottom:16px}
-  .proj-card-stats{display:flex;gap:8px}
-  .proj-stat{font-size:10px;font-family:'DM Mono',monospace;padding:3px 8px;border-radius:10px;border:1px solid}
-  .new-proj-card{background:transparent;border:1px dashed var(--border2);border-radius:10px;padding:20px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:140px;transition:all .2s;color:var(--muted)}
-  .new-proj-card:hover{border-color:var(--accent);color:var(--accent)}
-  .new-proj-icon{font-size:24px}
-  .new-proj-label{font-size:12px;font-family:'DM Mono',monospace;letter-spacing:.08em;text-transform:uppercase}
+.fr{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.fl{font-size:10px;font-family:'DM Mono',monospace;color:var(--mu);text-transform:uppercase;letter-spacing:.1em}
+.ft{padding:5px 14px;border-radius:20px;border:1px solid var(--bd);background:transparent;color:var(--mu);font-size:11px;font-family:'DM Mono',monospace}
+.ft:hover{border-color:#444;color:var(--mi)}
+.ft.active{background:var(--ad);border-color:var(--ac);color:var(--ac)}
 
-  /* ── MODALS ── */
-  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
-  .modal{background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:28px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto}
-  .modal-title{font-size:16px;font-weight:600;letter-spacing:-.02em;margin-bottom:20px}
-  .modal-label{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:6px;margin-top:14px}
-  .modal-input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:9px 12px;color:var(--text);font-size:13px}
-  .modal-input:focus{outline:none;border-color:var(--accent)}
-  .modal-select{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:9px 12px;color:var(--text);font-size:13px}
-  .modal-select option{background:var(--surface2)}
-  .modal-btns{display:flex;gap:8px;margin-top:20px}
-  .modal-btn-primary{flex:1;background:var(--accent);color:#000;border:none;padding:10px;border-radius:6px;font-size:13px;font-weight:700}
-  .modal-btn-primary:hover{opacity:.9}
-  .modal-btn-cancel{flex:1;background:transparent;color:var(--mid);border:1px solid var(--border2);padding:10px;border-radius:6px;font-size:13px}
-  .modal-btn-cancel:hover{border-color:#555;color:var(--text)}
+.pl{display:flex;flex-direction:column;gap:8px}
+.pcard{background:var(--sf);border:1px solid var(--bd);border-radius:8px;overflow:hidden}
+.phdr{display:flex;align-items:center;padding:12px 16px;cursor:pointer;gap:10px;user-select:none}
+.ptag{font-size:9px;font-family:'DM Mono',monospace;background:var(--ad);color:var(--ac);padding:3px 8px;border-radius:3px;letter-spacing:.06em;white-space:nowrap}
+.pnm{font-size:14px;font-weight:500;flex:1}
+.vbs{display:flex;gap:4px}
+.vb{font-size:9px;font-family:'DM Mono',monospace;padding:2px 7px;border-radius:10px;border:1px solid}
+.ads{display:flex;gap:3px;align-items:center}
+.ad{width:6px;height:6px;border-radius:50%;opacity:.15}
+.ad.lit{opacity:1}
+.sp{display:flex;align-items:center;gap:5px;padding:4px 11px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap;border:none;background:transparent}
+.spd{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.cv{color:var(--mu);font-size:10px;transition:transform .2s}
+.cv.open{transform:rotate(180deg)}
+.pbody{display:none;border-top:1px solid var(--bd)}
+.pbody.open{display:block}
 
-  /* ── PROJECT VIEW ── */
-  .proj-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px;gap:16px}
-  .proj-header-left h1{font-size:20px;font-weight:700;letter-spacing:-.03em}
-  .proj-header-left p{font-size:13px;color:var(--mid);margin-top:3px}
-  .proj-header-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.shbar{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--s2);border-bottom:1px solid var(--bd)}
+.shlbl{font-size:9px;font-family:'DM Mono',monospace;color:var(--mu);text-transform:uppercase;letter-spacing:.1em}
+.shbtn{padding:4px 12px;border-radius:20px;border:1px solid var(--b2);background:transparent;color:var(--mu);font-size:10px;font-family:'DM Mono',monospace}
+.shbtn.m{border-color:#e879f9;color:#e879f9;background:rgba(232,121,249,.1)}
+.shbtn.c{border-color:#4ade80;color:#4ade80;background:rgba(74,222,128,.1)}
 
-  .summary-row{display:flex;gap:8px;margin-bottom:20px}
-  .sum-chip{display:flex;flex-direction:column;align-items:center;padding:10px 18px;background:var(--surface);border:1px solid var(--border);border-radius:8px;gap:2px}
-  .sum-count{font-family:'DM Mono',monospace;font-size:18px;font-weight:500}
-  .sum-lbl{font-size:9px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.twrap{padding:16px;border-bottom:1px solid var(--bd)}
+.tlbl{font-size:9px;font-family:'DM Mono',monospace;color:var(--mu);text-transform:uppercase;letter-spacing:.12em;margin-bottom:14px;display:block}
+.thermo{display:flex;align-items:flex-start}
+.tc{flex:1;height:2px;margin-top:15px;background:var(--bd)}
+.tc.lit{background:#4ade80}
+.tn{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:90px}
+.tci{width:30px;height:30px;border-radius:50%;border:2px solid var(--bd);background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;cursor:pointer;font-family:'DM Mono',monospace;flex-shrink:0;color:var(--mu)}
+.trl{font-size:10px;font-weight:600}
+.tbg{font-size:9px;font-family:'DM Mono',monospace;padding:2px 8px;border-radius:20px;border:1px solid var(--bd);color:var(--mu);background:transparent;cursor:pointer;white-space:nowrap}
 
-  .filter-row{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}
-  .filter-lbl{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
-  .ftab{padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-family:'DM Mono',monospace;transition:all .15s}
-  .ftab:hover{border-color:#444;color:var(--mid)}
-  .ftab.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+.pw{padding:12px 16px 0}
+.slbl{font-size:9px;font-family:'DM Mono',monospace;color:var(--mu);text-transform:uppercase;letter-spacing:.12em;margin-bottom:7px;display:block}
+.pr{display:flex;gap:6px}
+.pb{padding:4px 12px;border-radius:4px;border:1px solid var(--bd);background:transparent;color:var(--mu);font-size:11px}
 
-  /* ── PIECE CARDS ── */
-  .pieces-list{display:flex;flex-direction:column;gap:8px}
-  .piece-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;transition:border-color .2s}
-  .piece-card:hover{border-color:var(--border2)}
-  .piece-hdr{display:flex;align-items:center;padding:12px 16px;cursor:pointer;gap:10px;user-select:none}
-  .piece-tag{font-size:9px;font-family:'DM Mono',monospace;background:var(--accent-dim);color:var(--accent);padding:3px 8px;border-radius:3px;letter-spacing:.06em;white-space:nowrap}
-  .piece-name{font-size:14px;font-weight:500;flex:1}
-  .vis-badges{display:flex;gap:4px}
-  .vis-badge{font-size:9px;font-family:'DM Mono',monospace;padding:2px 7px;border-radius:10px;border:1px solid}
-  .area-dots{display:flex;gap:3px;align-items:center}
-  .adot{width:6px;height:6px;border-radius:50%;opacity:.15;transition:opacity .2s}
-  .adot.lit{opacity:1}
-  .spill{display:flex;align-items:center;gap:5px;padding:4px 11px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap;border:none;background:transparent}
-  .sdot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
-  .chev{color:var(--muted);font-size:10px;transition:transform .2s}
-  .chev.open{transform:rotate(180deg)}
+.ag{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--bd);margin-top:12px;border-top:1px solid var(--bd)}
+.as{background:var(--sf);padding:12px 14px}
+.ah{display:flex;align-items:center;gap:7px;margin-bottom:7px}
+.ads2{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.an{font-size:10px;font-family:'DM Mono',monospace;font-weight:500;text-transform:uppercase;letter-spacing:.1em;flex:1}
+.asel{background:var(--s2);border:1px solid var(--bd);border-radius:4px;color:var(--mi);font-size:9px;font-family:'DM Mono',monospace;padding:2px 5px}
+.asel option{background:#1a1a1a}
+.srcr{display:flex;gap:4px;margin-bottom:7px;align-items:center}
+.srclbl{font-size:9px;font-family:'DM Mono',monospace;color:var(--mu);text-transform:uppercase;letter-spacing:.1em}
+.srcbtn{padding:2px 9px;border-radius:20px;border:1px solid var(--bd);background:transparent;color:var(--mu);font-size:9px;font-family:'DM Mono',monospace}
 
-  .piece-body{display:none;border-top:1px solid var(--border)}
-  .piece-body.open{display:block}
+.cl{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.ci{display:flex;align-items:flex-start;gap:6px;background:#111;border:1px solid var(--bd);border-radius:4px;padding:6px 8px}
+.cb{font-size:11px;color:var(--mu);flex-shrink:0;margin-top:1px;user-select:none}
+.cin{flex:1;background:transparent;border:none;color:var(--tx);font-family:'DM Sans',sans-serif;font-size:12px;line-height:1.5;outline:none;resize:none;min-height:20px}
+.cin::placeholder{color:#333}
+.cdl{background:none;border:none;color:var(--mu);font-size:12px;padding:0 2px;flex-shrink:0;opacity:0;line-height:1}
+.ci:hover .cdl{opacity:1}
+.cdl:hover{color:#f87171}
+.acb{display:flex;align-items:center;gap:5px;background:none;border:1px dashed var(--bd);border-radius:4px;color:var(--mu);font-size:10px;font-family:'DM Mono',monospace;padding:5px 10px;width:100%;letter-spacing:.05em}
+.acb:hover{border-color:var(--b2);color:var(--mi)}
 
-  /* SHARE CONTROLS */
-  .share-bar{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--surface2);border-bottom:1px solid var(--border)}
-  .share-lbl{font-size:9px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
-  .share-btn{padding:4px 12px;border-radius:20px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-size:10px;font-family:'DM Mono',monospace;transition:all .15s}
-  .share-btn.active-marca{border-color:#e879f9;color:#e879f9;background:rgba(232,121,249,.1)}
-  .share-btn.active-casa{border-color:#4ade80;color:#4ade80;background:rgba(74,222,128,.1)}
+.vw{padding:12px 14px;border-top:1px solid var(--bd)}
+.vh{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 
-  /* THERMOMETER */
-  .thermo-wrap{padding:16px;border-bottom:1px solid var(--border)}
-  .thermo-lbl{font-size:9px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-bottom:14px;display:block}
-  .thermo{display:flex;align-items:flex-start}
-  .tconn{flex:1;height:2px;margin-top:15px;background:var(--border);transition:background .3s}
-  .tconn.lit{background:#4ade80}
-  .tnode{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:90px}
-  .tcircle{width:30px;height:30px;border-radius:50%;border:2px solid var(--border);background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;cursor:pointer;font-family:'DM Mono',monospace;flex-shrink:0;color:var(--muted);transition:all .2s}
-  .trole{font-size:10px;font-weight:600}
-  .tbadge{font-size:9px;font-family:'DM Mono',monospace;padding:2px 8px;border-radius:20px;border:1px solid var(--border);color:var(--muted);background:transparent;cursor:pointer;white-space:nowrap}
+.hw{padding:12px 16px;border-top:1px solid var(--bd)}
+.htg{background:none;border:none;color:var(--mu);font-size:10px;font-family:'DM Mono',monospace;padding:0;letter-spacing:.08em;text-transform:uppercase}
+.hl{margin-top:8px;display:none}
+.hl.open{display:block}
+.hr{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)}
+.hr:last-child{border-bottom:none}
+.hrn{font-size:9px;font-family:'DM Mono',monospace;color:var(--mu);white-space:nowrap;min-width:38px}
+.hrt{font-size:11px;color:var(--mi);line-height:1.5;flex:1}
 
-  /* PRIORITY */
-  .prio-wrap{padding:12px 16px 0}
-  .sec-lbl{font-size:9px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-bottom:7px;display:block}
-  .prio-row{display:flex;gap:6px}
-  .prio-btn{padding:4px 12px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;transition:all .15s}
+.mw{margin-top:24px}
+.mt{font-size:10px;font-family:'DM Mono',monospace;color:var(--mu);text-transform:uppercase;letter-spacing:.12em;margin-bottom:12px;display:block}
+.mr{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--sf);border:1px solid var(--bd);border-radius:6px;margin-bottom:6px}
+.mav{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.mn{font-size:13px;font-weight:500;flex:1}
+.me{font-size:11px;color:var(--mi)}
+.mrl{font-size:9px;font-family:'DM Mono',monospace;padding:3px 8px;border-radius:10px;border:1px solid}
 
-  /* AREAS */
-  .areas-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);margin-top:12px;border-top:1px solid var(--border)}
-  .area-sec{background:var(--surface);padding:12px 14px}
-  .area-hdr{display:flex;align-items:center;gap:7px;margin-bottom:7px}
-  .area-dot-sm{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-  .area-name{font-size:10px;font-family:'DM Mono',monospace;font-weight:500;text-transform:uppercase;letter-spacing:.1em;flex:1}
-  .area-sel{background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--mid);font-size:9px;font-family:'DM Mono',monospace;padding:2px 5px}
-  .area-sel option{background:#1a1a1a}
-  .src-row{display:flex;gap:4px;margin-bottom:7px;align-items:center}
-  .src-lbl{font-size:9px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
-  .src-btn{padding:2px 9px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:9px;font-family:'DM Mono',monospace;transition:all .15s}
-  .area-ta{width:100%;background:#111;border:1px solid var(--border);border-radius:4px;padding:8px 10px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:11px;line-height:1.6;min-height:64px}
-  .area-ta:focus{outline:none}
-  .area-ta::placeholder{color:#333;font-size:10px}
+.sw{margin-top:28px;padding-top:20px;border-top:1px solid var(--bd)}
+.sc2{background:var(--sf);border:1px solid var(--bd);border-radius:6px;margin-bottom:8px;overflow:hidden}
+.sh2{display:flex;align-items:center;padding:10px 14px;cursor:pointer;gap:10px}
+.sr2{font-size:11px;font-family:'DM Mono',monospace;color:var(--ac)}
+.sf2{font-size:11px;color:var(--mu);flex:1}
+.sb2{display:none;padding:12px 14px;border-top:1px solid var(--bd)}
+.sb2.open{display:block}
 
-  /* BULLET COMMENTS */
-  .comments-list{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
-  .comment-item{display:flex;align-items:flex-start;gap:6px;background:#111;border:1px solid var(--border);border-radius:4px;padding:6px 8px;transition:border-color .15s}
-  .comment-item:focus-within{border-color:var(--border2)}
-  .comment-bullet{font-size:11px;color:var(--muted);flex-shrink:0;margin-top:1px;user-select:none}
-  .comment-input{flex:1;background:transparent;border:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;line-height:1.5;outline:none;resize:none;min-height:20px}
-  .comment-input::placeholder{color:#333}
-  .comment-del{background:none;border:none;color:var(--muted);font-size:12px;padding:0 2px;flex-shrink:0;opacity:0;transition:opacity .15s;cursor:pointer;line-height:1}
-  .comment-item:hover .comment-del{opacity:1}
-  .comment-del:hover{color:#f87171}
-  .add-comment-btn{display:flex;align-items:center;gap:5px;background:none;border:1px dashed var(--border);border-radius:4px;color:var(--muted);font-size:10px;font-family:'DM Mono',monospace;padding:5px 10px;width:100%;cursor:pointer;transition:all .15s;letter-spacing:.05em}
-  .add-comment-btn:hover{border-color:var(--border2);color:var(--mid)}
-  .vfx-wrap{padding:12px 14px;border-top:1px solid var(--border)}
-  .vfx-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-  .vfx-ta{width:100%;background:#111;border:1px solid var(--border);border-radius:4px;padding:8px 10px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:11px;line-height:1.6;min-height:60px}
-  .vfx-ta:focus{outline:none;border-color:#f97316}
-  .vfx-ta::placeholder{color:#333;font-size:10px}
+.pf{margin-top:24px;padding-top:20px;border-top:1px solid var(--bd)}
+.nta{width:100%;background:#111;border:1px solid var(--bd);border-radius:6px;padding:10px 12px;color:var(--tx);font-family:'DM Sans',sans-serif;font-size:13px;min-height:56px;margin-top:6px;margin-bottom:14px}
+.nta:focus{outline:none;border-color:var(--ac)}
+.nta::placeholder{color:#333;font-size:12px}
+.br{display:flex;gap:8px;flex-wrap:wrap}
+.bp{background:var(--ac);color:#000;border:none;padding:9px 20px;border-radius:6px;font-size:13px;font-weight:700}
+.bp:hover{opacity:.9}
+.ba{background:transparent;color:var(--ac);border:1px solid rgba(200,241,53,.3);padding:9px 20px;border-radius:6px;font-size:13px}
+.ba:hover{background:rgba(200,241,53,.08)}
+.si{font-size:10px;font-family:'DM Mono',monospace;color:var(--mu)}
 
-  /* HISTORY */
-  .hist-wrap{padding:12px 16px;border-top:1px solid var(--border)}
-  .hist-toggle{background:none;border:none;color:var(--muted);font-size:10px;font-family:'DM Mono',monospace;padding:0;letter-spacing:.08em;text-transform:uppercase}
-  .hist-list{margin-top:8px;display:none}
-  .hist-list.open{display:block}
-  .hist-row{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)}
-  .hist-row:last-child{border-bottom:none}
-  .hist-rnd{font-size:9px;font-family:'DM Mono',monospace;color:var(--muted);white-space:nowrap;min-width:38px}
-  .hist-txt{font-size:11px;color:var(--mid);line-height:1.5;flex:1}
+.tp{width:290px;flex-shrink:0;background:var(--sf);border-left:1px solid var(--bd);display:flex;flex-direction:column;position:sticky;top:57px;height:calc(100vh - 57px);overflow:hidden}
+.tph{padding:14px 14px 10px;border-bottom:1px solid var(--bd);flex-shrink:0}
+.tpt{font-size:10px;font-family:'DM Mono',monospace;color:var(--ac);text-transform:uppercase;letter-spacing:.15em;display:block;margin-bottom:6px}
+.tpcs{display:flex;gap:6px}
+.tpch{font-size:10px;font-family:'DM Mono',monospace;padding:2px 8px;border-radius:10px}
+.tpl{flex:1;overflow-y:auto;padding:10px 12px}
+.tpg{margin-bottom:14px}
+.tpgl{font-size:9px;font-family:'DM Mono',monospace;color:var(--mu);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.tpgd{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.tpi{display:flex;align-items:flex-start;gap:8px;padding:6px 8px;border-radius:5px;margin-bottom:3px}
+.tpi:hover{background:var(--s2)}
+.tpck{width:16px;height:16px;border-radius:4px;border:1px solid var(--b2);background:transparent;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:9px;color:transparent}
+.tpck.done{background:var(--ac);border-color:var(--ac);color:#000}
+.tptx{font-size:11px;color:var(--tx);line-height:1.5;flex:1}
+.tptx.done{color:var(--mu);text-decoration:line-through}
+.tpat{font-size:9px;font-family:'DM Mono',monospace;padding:1px 6px;border-radius:3px;flex-shrink:0;margin-top:2px}
+.tpem{text-align:center;padding:24px 14px;color:var(--mu);font-size:11px;line-height:1.6}
+.tpad{padding:10px 12px;border-top:1px solid var(--bd);flex-shrink:0}
+.tpin{width:100%;background:var(--s2);border:1px solid var(--bd);border-radius:5px;padding:7px 10px;color:var(--tx);font-size:12px;margin-bottom:6px}
+.tpin:focus{outline:none;border-color:var(--ac)}
+.tpab{width:100%;background:var(--ad);color:var(--ac);border:1px solid rgba(200,241,53,.2);border-radius:5px;padding:7px;font-size:11px;font-family:'DM Mono',monospace;letter-spacing:.05em}
+.tpab:hover{background:rgba(200,241,53,.15)}
 
-  /* MEMBERS */
-  .members-wrap{margin-top:24px}
-  .members-title{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-bottom:12px;display:block}
-  .member-row{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;margin-bottom:6px}
-  .member-avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
-  .member-name{font-size:13px;font-weight:500;flex:1}
-  .member-email{font-size:11px;color:var(--mid)}
-  .member-role-badge{font-size:9px;font-family:'DM Mono',monospace;padding:3px 8px;border-radius:10px;border:1px solid}
+.mo{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
+.md{background:var(--sf);border:1px solid var(--b2);border-radius:12px;padding:28px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto}
+.mdt{font-size:16px;font-weight:600;letter-spacing:-.02em;margin-bottom:20px}
+.mdl{font-size:10px;font-family:'DM Mono',monospace;color:var(--mu);text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:6px;margin-top:14px}
+.mdi{width:100%;background:var(--s2);border:1px solid var(--b2);border-radius:6px;padding:9px 12px;color:var(--tx);font-size:13px}
+.mdi:focus{outline:none;border-color:var(--ac)}
+.mds{width:100%;background:var(--s2);border:1px solid var(--b2);border-radius:6px;padding:9px 12px;color:var(--tx);font-size:13px}
+.mds option{background:var(--s2)}
+.mdb{display:flex;gap:8px;margin-top:20px}
+.mbok{flex:1;background:var(--ac);color:#000;border:none;padding:10px;border-radius:6px;font-size:13px;font-weight:700}
+.mbok:hover{opacity:.9}
+.mbca{flex:1;background:transparent;color:var(--mi);border:1px solid var(--b2);padding:10px;border-radius:6px;font-size:13px}
+.mbca:hover{border-color:#555;color:var(--tx)}
 
-  /* SNAPSHOTS */
-  .snaps-wrap{margin-top:28px;padding-top:20px;border-top:1px solid var(--border)}
-  .snap-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;margin-bottom:8px;overflow:hidden}
-  .snap-hdr{display:flex;align-items:center;padding:10px 14px;cursor:pointer;gap:10px}
-  .snap-ronda{font-size:11px;font-family:'DM Mono',monospace;color:var(--accent)}
-  .snap-fecha{font-size:11px;color:var(--muted);flex:1}
-  .snap-body{display:none;padding:12px 14px;border-top:1px solid var(--border)}
-  .snap-body.open{display:block}
-  .snap-piece{margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)}
-  .snap-piece:last-child{border-bottom:none;margin-bottom:0}
-  .snap-piece-name{font-size:12px;font-weight:500;margin-bottom:4px}
-  .snap-area{font-size:11px;color:var(--mid);margin-bottom:2px;line-height:1.5}
-
-  /* FOOTER ACTIONS */
-  .proj-footer{margin-top:24px;padding-top:20px;border-top:1px solid var(--border)}
-  .notes-ta{width:100%;background:#111;border:1px solid var(--border);border-radius:6px;padding:10px 12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;min-height:56px;margin-top:6px;margin-bottom:14px}
-  .notes-ta:focus{outline:none;border-color:var(--accent)}
-  .notes-ta::placeholder{color:#333;font-size:12px}
-  .btn-row{display:flex;gap:8px;flex-wrap:wrap}
-  .btn-primary{background:var(--accent);color:#000;border:none;padding:9px 20px;border-radius:6px;font-size:13px;font-weight:700}
-  .btn-primary:hover{opacity:.9}
-  .btn-accent{background:transparent;color:var(--accent);border:1px solid rgba(200,241,53,.3);padding:9px 20px;border-radius:6px;font-size:13px}
-  .btn-accent:hover{background:rgba(200,241,53,.08)}
-  .btn-danger{background:transparent;color:#f87171;border:1px solid rgba(248,113,113,.3);padding:9px 20px;border-radius:6px;font-size:13px}
-  .btn-danger:hover{background:rgba(248,113,113,.08)}
-  .save-ind{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted)}
-
-  /* MISC */
-  .tag-pill{font-size:9px;font-family:'DM Mono',monospace;padding:3px 9px;border-radius:10px;border:1px solid}
-  .empty-state{text-align:center;padding:60px 20px;color:var(--muted)}
-  .empty-state h3{font-size:16px;color:var(--text);margin-bottom:8px}
-  .empty-state p{font-size:13px;line-height:1.6}
-  .spinner{display:inline-block;width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite}
-  @keyframes spin{to{transform:rotate(360deg)}}
-
-  @media(max-width:700px){
-    .sidebar{display:none}
-    .main{margin-left:0}
-    .areas-grid{grid-template-columns:1fr}
-  }
+.es{text-align:center;padding:60px 20px;color:var(--mu)}
+.es h3{font-size:16px;color:var(--tx);margin-bottom:8px}
+.es p{font-size:13px;line-height:1.6}
+@media(max-width:700px){.sb{display:none}.main{margin-left:0}.ag{grid-template-columns:1fr}.tp{display:none}}
 `
 
-// ── HELPERS ───────────────────────────────────────────────────
-function initials(name) {
-  if (!name) return '?'
-  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+function initials(n) { return (n||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) }
+function fbToItems(fb) {
+  if(!fb?.trim()) return []
+  return fb.split('\n').filter(l=>l.trim()).map((l,i)=>({id:i,text:l.replace(/^[·•\-]\s*/,'')}))
 }
+function itemsToFb(items) { return items.map(i=>i.text).join('\n') }
 
-// ── MAIN COMPONENT ────────────────────────────────────────────
 export default function Platform() {
-  // AUTH
-  const [user, setUser]           = useState(null)
-  const [authMode, setAuthMode]   = useState('login') // login | register | forgot
-  const [email, setEmail]         = useState('')
-  const [password, setPassword]   = useState('')
-  const [name, setName]           = useState('')
-  const [role, setRole]           = useState('agencia')
-  const [authError, setAuthError] = useState('')
-  const [authSuccess, setAuthSuccess] = useState('')
-  const [authLoading, setAuthLoading] = useState(false)
-  const [userProfile, setUserProfile] = useState(null)
+  const [user,setUser]               = useState(null)
+  const [prof,setProf]               = useState(null)
+  const [aMode,setAMode]             = useState('login')
+  const [email,setEmail]             = useState('')
+  const [pw,setPw]                   = useState('')
+  const [nm,setNm]                   = useState('')
+  const [rl,setRl]                   = useState('agencia')
+  const [aErr,setAErr]               = useState('')
+  const [aOk,setAOk]                 = useState('')
+  const [aLd,setALd]                 = useState(false)
+  const [view,setView]               = useState('dashboard')
+  const [ap,setAp]                   = useState(null)
+  const [projs,setProjs]             = useState([])
+  const [snwp,setSnwp]               = useState(false)
+  const [npn,setNpn]                 = useState('')
+  const [npc,setNpc]                 = useState('')
+  const [pieces,setPieces]           = useState([])
+  const [fb,setFb]                   = useState({})
+  const [approvs,setApprovs]         = useState({})
+  const [vis,setVis]                 = useState({})
+  const [mbrs,setMbrs]               = useState([])
+  const [snaps,setSnaps]             = useState([])
+  const [pn,setPn]                   = useState({notas:'',fecha:'',ronda:''})
+  const [todos,setTodos]             = useState([])
+  const [ntxt,setNtxt]               = useState('')
+  const [oc,setOc]                   = useState({})
+  const [oh,setOh]                   = useState({})
+  const [os,setOs]                   = useState({})
+  const [flt,setFlt]                 = useState('all')
+  const [sv,setSv]                   = useState('idle')
+  const [snwm,setSnwm]               = useState(false)
+  const [nme,setNme]                 = useState('')
+  const [nmn,setNmn]                 = useState('')
+  const [nmr,setNmr]                 = useState('agencia')
+  const [snwpc,setSnwpc]             = useState(false)
+  const [nptag,setNptag]             = useState('')
+  const [npnm,setNpnm]               = useState('')
+  const [npgr,setNpgr]               = useState('')
 
-  // NAV
-  const [view, setView]           = useState('dashboard') // dashboard | project
-  const [activeProject, setActiveProject] = useState(null)
+  const canEdit   = prof?.role==='productor'||prof?.role==='agencia'
+  const canShare  = prof?.role==='productor'||prof?.role==='agencia'
+  const canManage = prof?.role==='productor'
 
-  // PROJECTS
-  const [projects, setProjects]   = useState([])
-  const [showNewProj, setShowNewProj] = useState(false)
-  const [newProjName, setNewProjName] = useState('')
-  const [newProjClient, setNewProjClient] = useState('')
-
-  // PROJECT DATA
-  const [pieces, setPieces]       = useState([])
-  const [feedback, setFeedback]   = useState({}) // pieceId → {area → {feedback,status,sources}}
-  const [approvals, setApprovals] = useState({}) // pieceId → {role → state}
-  const [visibility, setVisibility] = useState({}) // pieceId → {marca, casa}
-  const [members, setMembers]     = useState([])
-  const [snapshots, setSnapshots] = useState([])
-  const [projNotes, setProjNotes] = useState({ notas:'', fecha:'', ronda:'' })
-  const [todos, setTodos]         = useState([])
-  const [newTodoText, setNewTodoText] = useState('')
-  const [openCards, setOpenCards] = useState({})
-  const [openHist, setOpenHist]   = useState({})
-  const [openSnaps, setOpenSnaps] = useState({})
-  const [filter, setFilter]       = useState('all')
-  const [saveStatus, setSaveStatus] = useState('idle')
-  const [showAddPiece, setShowAddPiece] = useState(false)
-  const [newPieceName, setNewPieceName] = useState('')
-  const [newPieceTag, setNewPieceTag]   = useState('')
-  const [newPieceGroup, setNewPieceGroup] = useState('')
-  const [showAddMember, setShowAddMember] = useState(false)
-  const [newMemberEmail, setNewMemberEmail] = useState('')
-  const [newMemberName, setNewMemberName]   = useState('')
-  const [newMemberRole, setNewMemberRole]   = useState('agencia')
-
-  // ── AUTH ────────────────────────────────────────────────────
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) loadUser(session.user)
+  useEffect(()=>{
+    supabase.auth.getSession().then(({data:{session}})=>{ if(session) loadUser(session.user) })
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((_,session)=>{
+      if(session) loadUser(session.user)
+      else { setUser(null); setProf(null) }
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (session) loadUser(session.user)
-      else { setUser(null); setUserProfile(null) }
-    })
-    return () => subscription.unsubscribe()
-  }, [])
+    return ()=>subscription.unsubscribe()
+  },[])
 
-  async function loadUser(authUser) {
-    setUser(authUser)
-    const { data } = await supabase.from('users').select('*').eq('id', authUser.id).single()
-    if (data) setUserProfile(data)
-    loadProjects(authUser.id)
+  async function loadUser(u) {
+    setUser(u)
+    const {data}=await supabase.from('users').select('*').eq('id',u.id).single()
+    if(data) setProf(data)
+    const {data:pm}=await supabase.from('project_members').select('project_id, projects(*)').eq('user_id',u.id)
+    if(pm) setProjs(pm.map(d=>d.projects).filter(Boolean))
   }
 
-  async function handleAuth() {
-    setAuthLoading(true); setAuthError(''); setAuthSuccess('')
-    if (authMode === 'forgot') {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin,
-      })
-      if (error) setAuthError('No pudimos enviar el correo. Verifica el email.')
-      else setAuthSuccess('Te enviamos un correo para restablecer tu contraseña.')
-      setAuthLoading(false); return
+  async function doAuth() {
+    setALd(true); setAErr(''); setAOk('')
+    if(aMode==='forgot') {
+      const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin})
+      if(error) setAErr('No pudimos enviar el correo.')
+      else setAOk('Revisa tu correo para restablecer tu contraseña.')
+      setALd(false); return
     }
-    if (authMode === 'register') {
-      const { data, error } = await supabase.auth.signUp({ email, password })
-      if (error) { setAuthError(error.message); setAuthLoading(false); return }
-      if (data.user) {
-        await supabase.from('users').insert({ id: data.user.id, email, name, role })
-      }
+    if(aMode==='register') {
+      const {data,error}=await supabase.auth.signUp({email,password:pw})
+      if(error) { setAErr(error.message); setALd(false); return }
+      if(data.user) await supabase.from('users').insert({id:data.user.id,email,name:nm,role:rl})
     } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) { setAuthError('Email o contraseña incorrectos'); setAuthLoading(false); return }
+      const {error}=await supabase.auth.signInWithPassword({email,password:pw})
+      if(error) { setAErr('Email o contraseña incorrectos'); setALd(false); return }
     }
-    setAuthLoading(false)
+    setALd(false)
   }
 
-  async function handleLogout() {
-    await supabase.auth.signOut()
-    setView('dashboard'); setActiveProject(null)
+  async function logout() {
+    await supabase.auth.signOut(); setView('dashboard'); setAp(null)
   }
 
-  const canEdit = userProfile && (userProfile.role === 'productor' || userProfile.role === 'agencia')
-  const canShare = userProfile && (userProfile.role === 'productor' || userProfile.role === 'agencia')
-  const canManage = userProfile && userProfile.role === 'productor'
-
-  // ── PROJECTS ────────────────────────────────────────────────
-  async function loadProjects(uid) {
-    const { data } = await supabase
-      .from('project_members')
-      .select('project_id, projects(*)')
-      .eq('user_id', uid)
-    if (data) setProjects(data.map(d => d.projects).filter(Boolean))
-  }
-
-  async function createProject() {
-    if (!newProjName.trim()) return
-    const { data: proj } = await supabase.from('projects').insert({
-      name: newProjName, client: newProjClient, productor_id: user.id
-    }).select().single()
-    if (proj) {
-      await supabase.from('project_members').insert({ project_id: proj.id, user_id: user.id, role: 'productor' })
-      setProjects(p => [...p, proj])
-      setShowNewProj(false); setNewProjName(''); setNewProjClient('')
+  async function createProj() {
+    if(!npn.trim()) return
+    const {data:p}=await supabase.from('projects').insert({name:npn,client:npc,productor_id:user.id}).select().single()
+    if(p) {
+      await supabase.from('project_members').insert({project_id:p.id,user_id:user.id,role:'productor'})
+      setProjs(x=>[...x,p]); setSnwp(false); setNpn(''); setNpc('')
     }
   }
 
-  // ── PROJECT LOAD ─────────────────────────────────────────────
-  async function openProject(proj) {
-    setPieces([])
-    setFeedback({})
-    setApprovals({})
-    setVisibility({})
-    setMembers([])
-    setSnapshots([])
-    setTodos([])
-    setActiveProject(proj)
-    setView('project')
-    setFilter('all')
-    setOpenCards({})
-    await Promise.all([
-      loadPieces(proj.id),
-      loadMembers(proj.id),
-      loadSnapshots(proj.id),
-      loadProjNotes(proj.id),
-      loadTodos(proj.id),
+  async function openProj(p) {
+    setPieces([]); setFb({}); setApprovs({}); setVis({}); setMbrs([]); setSnaps([]); setTodos([])
+    setAp(p); setView('project'); setFlt('all'); setOc({})
+    setPn({notas:'',fecha:'',ronda:''})
+    const [pcs,mbs,sps,notes,tds]=await Promise.all([
+      supabase.from('pieces').select('*').eq('project_id',p.id).order('position'),
+      supabase.from('project_members').select('*, users(*)').eq('project_id',p.id),
+      supabase.from('snapshots').select('*').eq('project_id',p.id).order('created_at',{ascending:false}),
+      supabase.from('project_notes').select('*').eq('project_id',p.id).single(),
+      supabase.from('todos').select('*').eq('project_id',p.id).order('created_at'),
     ])
-  }
-
-  async function loadTodos(projectId) {
-    const { data } = await supabase.from('todos').select('*').eq('project_id', projectId).order('created_at')
-    if (data) setTodos(data)
-  }
-
-  async function toggleTodo(todoId) {
-    if (!canManage) return
-    const todo = todos.find(t => t.id === todoId)
-    const next = !todo.completed
-    setTodos(t => t.map(td => td.id === todoId ? { ...td, completed: next, completed_at: next ? new Date().toISOString() : null } : td))
-    await supabase.from('todos').update({ completed: next, completed_at: next ? new Date().toISOString() : null }).eq('id', todoId)
-  }
-
-  async function addManualTodo() {
-    if (!newTodoText.trim() || !canManage) return
-    const { data } = await supabase.from('todos').insert({
-      project_id: activeProject.id,
-      text: newTodoText.trim(),
-      piece_name: 'General',
-      area: 'general',
-    }).select().single()
-    if (data) setTodos(t => [...t, data])
-    setNewTodoText('')
-  }
-
-  async function syncTodosFromFeedback(pieceId, pieceName, area, items) {
-    // Get existing todos for this piece+area
-    const existing = todos.filter(t => t.piece_id === pieceId && t.area === area)
-    const existingTexts = existing.map(t => t.text)
-    const newItems = items.filter(i => i.text.trim() && !existingTexts.includes(i.text.trim()))
-    if (!newItems.length) return
-    const inserts = newItems.map(i => ({
-      project_id: activeProject.id,
-      piece_id: pieceId,
-      piece_name: pieceName,
-      area,
-      text: i.text.trim(),
-    }))
-    const { data } = await supabase.from('todos').insert(inserts).select()
-    if (data) setTodos(t => [...t, ...data])
-  }
-
-  async function loadPieces(projectId) {
-    const { data: pcs } = await supabase.from('pieces').select('*').eq('project_id', projectId).order('position')
-    if (!pcs) return
-    setPieces(pcs)
-
-    const pieceIds = pcs.map(p => p.id)
-    if (!pieceIds.length) return
-
-    const [{ data: fbs }, { data: apps }, { data: vis }] = await Promise.all([
-      supabase.from('piece_feedback').select('*').in('piece_id', pieceIds),
-      supabase.from('piece_approvals').select('*').in('piece_id', pieceIds),
-      supabase.from('piece_visibility').select('*').in('piece_id', pieceIds),
+    const pl=pcs.data||[]
+    setPieces(pl)
+    if(mbs.data) setMbrs(mbs.data.map(d=>({...d.users,memberRole:d.role})))
+    if(sps.data) setSnaps(sps.data)
+    if(notes.data) setPn({notas:notes.data.notas||'',fecha:notes.data.fecha||'',ronda:notes.data.ronda||''})
+    if(tds.data) setTodos(tds.data)
+    if(!pl.length) return
+    const ids=pl.map(x=>x.id)
+    const [fbs,apps,vs]=await Promise.all([
+      supabase.from('piece_feedback').select('*').in('piece_id',ids),
+      supabase.from('piece_approvals').select('*').in('piece_id',ids),
+      supabase.from('piece_visibility').select('*').in('piece_id',ids),
     ])
-
-    const fbMap = {}
-    fbs?.forEach(f => {
-      if (!fbMap[f.piece_id]) fbMap[f.piece_id] = {}
-      fbMap[f.piece_id][f.area] = { feedback: f.feedback, status: f.status, sources: f.sources || [] }
-    })
-    setFeedback(fbMap)
-
-    const appMap = {}
-    apps?.forEach(a => {
-      if (!appMap[a.piece_id]) appMap[a.piece_id] = {}
-      appMap[a.piece_id][a.role] = a.state
-    })
-    setApprovals(appMap)
-
-    const visMap = {}
-    vis?.forEach(v => { visMap[v.piece_id] = { marca: v.visible_to_marca, casa: v.visible_to_casa } })
-    setVisibility(visMap)
+    const fm={}; fbs.data?.forEach(f=>{ if(!fm[f.piece_id]) fm[f.piece_id]={}; fm[f.piece_id][f.area]={feedback:f.feedback,status:f.status,sources:f.sources||[]} }); setFb(fm)
+    const am={}; apps.data?.forEach(a=>{ if(!am[a.piece_id]) am[a.piece_id]={}; am[a.piece_id][a.role]=a.state }); setApprovs(am)
+    const vm={}; vs.data?.forEach(v=>{ vm[v.piece_id]={marca:v.visible_to_marca,casa:v.visible_to_casa} }); setVis(vm)
   }
 
-  async function loadMembers(projectId) {
-    const { data } = await supabase.from('project_members').select('*, users(*)').eq('project_id', projectId)
-    if (data) setMembers(data.map(d => ({ ...d.users, memberRole: d.role })))
+  async function upStatus(pid,status) {
+    if(!canEdit) return
+    await supabase.from('pieces').update({status}).eq('id',pid)
+    setPieces(p=>p.map(x=>x.id===pid?{...x,status}:x))
+  }
+  async function upPriority(pid,priority) {
+    if(!canEdit) return
+    const np=pieces.find(p=>p.id===pid)?.priority===priority?null:priority
+    await supabase.from('pieces').update({priority:np}).eq('id',pid)
+    setPieces(p=>p.map(x=>x.id===pid?{...x,priority:np}:x))
+  }
+  async function upApproval(pid,rk) {
+    if(!canEdit) return
+    const r=APPROVAL_ROLES.find(x=>x.key===rk)
+    const cur=approvs[pid]?.[rk]||'idle'
+    const nxt=r.states[(r.states.indexOf(cur)+1)%r.states.length]
+    setApprovs(a=>({...a,[pid]:{...a[pid],[rk]:nxt}}))
+    await supabase.from('piece_approvals').upsert({piece_id:pid,role:rk,state:nxt},{onConflict:'piece_id,role'})
+  }
+  async function upFb(pid,area,field,value) {
+    if(!canEdit) return
+    const cur=fb[pid]?.[area]||{feedback:'',status:'pendiente',sources:[]}
+    const upd={...cur,[field]:value}
+    setFb(f=>({...f,[pid]:{...f[pid],[area]:upd}}))
+    setSv('saving')
+    clearTimeout(window._st)
+    window._st=setTimeout(async()=>{
+      await supabase.from('piece_feedback').upsert({piece_id:pid,area,feedback:upd.feedback,status:upd.status,sources:upd.sources},{onConflict:'piece_id,area'})
+      setSv('saved'); setTimeout(()=>setSv('idle'),2000)
+    },1000)
+  }
+  async function togSrc(pid,area,src) {
+    if(!canEdit) return
+    const cur=fb[pid]?.[area]?.sources||[]
+    upFb(pid,area,'sources',cur.includes(src)?cur.filter(s=>s!==src):[...cur,src])
+  }
+  async function togVis(pid,target) {
+    if(!canShare) return
+    const cur=vis[pid]||{marca:false,casa:false}
+    const nxt={...cur,[target]:!cur[target]}
+    setVis(v=>({...v,[pid]:nxt}))
+    await supabase.from('piece_visibility').upsert({piece_id:pid,visible_to_marca:nxt.marca,visible_to_casa:nxt.casa},{onConflict:'piece_id'})
+  }
+  async function upNotes(field,value) {
+    const nxt={...pn,[field]:value}; setPn(nxt)
+    clearTimeout(window._nt)
+    window._nt=setTimeout(async()=>{ await supabase.from('project_notes').upsert({project_id:ap.id,...nxt},{onConflict:'project_id'}) },1000)
   }
 
-  async function loadSnapshots(projectId) {
-    const { data } = await supabase.from('snapshots').select('*').eq('project_id', projectId).order('created_at', { ascending: false })
-    if (data) setSnapshots(data)
+  function addCmt(pid,area) {
+    const cur=fbToItems(fb[pid]?.[area]?.feedback||'')
+    upFb(pid,area,'feedback',itemsToFb([...cur,{id:Date.now(),text:''}]))
+  }
+  function upCmt(pid,area,idx,value) {
+    const cur=fbToItems(fb[pid]?.[area]?.feedback||'')
+    cur[idx]={...cur[idx],text:value}
+    upFb(pid,area,'feedback',itemsToFb(cur))
+    clearTimeout(window._tst)
+    window._tst=setTimeout(()=>{
+      const piece=pieces.find(p=>p.id===pid)
+      if(piece&&ap) syncTodos(pid,piece.name,area,cur.map((c,i)=>i===idx?{...c,text:value}:c))
+    },1500)
+  }
+  function delCmt(pid,area,idx) {
+    const cur=fbToItems(fb[pid]?.[area]?.feedback||'')
+    cur.splice(idx,1)
+    upFb(pid,area,'feedback',itemsToFb(cur))
   }
 
-  async function loadProjNotes(projectId) {
-    const { data } = await supabase.from('project_notes').select('*').eq('project_id', projectId).single()
-    if (data) setProjNotes({ notas: data.notas || '', fecha: data.fecha || '', ronda: data.ronda || '' })
+  async function syncTodos(pid,pname,area,items) {
+    const ex=todos.filter(t=>t.piece_id===pid&&t.area===area).map(t=>t.text)
+    const ni=items.filter(i=>i.text.trim()&&!ex.includes(i.text.trim()))
+    if(!ni.length) return
+    const {data}=await supabase.from('todos').insert(ni.map(i=>({project_id:ap.id,piece_id:pid,piece_name:pname,area,text:i.text.trim()}))).select()
+    if(data) setTodos(t=>[...t,...data])
+  }
+  async function togTodo(id) {
+    if(!canManage) return
+    const td=todos.find(t=>t.id===id); const nxt=!td.completed
+    setTodos(t=>t.map(x=>x.id===id?{...x,completed:nxt,completed_at:nxt?new Date().toISOString():null}:x))
+    await supabase.from('todos').update({completed:nxt,completed_at:nxt?new Date().toISOString():null}).eq('id',id)
+  }
+  async function addTodo() {
+    if(!ntxt.trim()||!canManage) return
+    const {data}=await supabase.from('todos').insert({project_id:ap.id,text:ntxt.trim(),piece_name:'General',area:'general'}).select().single()
+    if(data) setTodos(t=>[...t,data]); setNtxt('')
   }
 
-  // ── PIECE OPERATIONS ─────────────────────────────────────────
-  async function updatePieceStatus(pieceId, status) {
-    if (!canEdit) return
-    await supabase.from('pieces').update({ status }).eq('id', pieceId)
-    setPieces(p => p.map(pc => pc.id === pieceId ? { ...pc, status } : pc))
-  }
-
-  async function updatePiecePriority(pieceId, priority) {
-    if (!canEdit) return
-    const newPrio = pieces.find(p => p.id === pieceId)?.priority === priority ? null : priority
-    await supabase.from('pieces').update({ priority: newPrio }).eq('id', pieceId)
-    setPieces(p => p.map(pc => pc.id === pieceId ? { ...pc, priority: newPrio } : pc))
-  }
-
-  async function updateApproval(pieceId, roleKey) {
-    if (!canEdit) return
-    const role = APPROVAL_ROLES.find(r => r.key === roleKey)
-    const cur = approvals[pieceId]?.[roleKey] || 'idle'
-    const idx = role.states.indexOf(cur)
-    const next = role.states[(idx + 1) % role.states.length]
-    setApprovals(a => ({ ...a, [pieceId]: { ...a[pieceId], [roleKey]: next } }))
-    await supabase.from('piece_approvals').upsert({ piece_id: pieceId, role: roleKey, state: next }, { onConflict: 'piece_id,role' })
-  }
-
-  async function updateFeedback(pieceId, area, field, value) {
-    if (!canEdit) return
-    const current = feedback[pieceId]?.[area] || { feedback: '', status: 'pendiente', sources: [] }
-    const updated = { ...current, [field]: value }
-    setFeedback(f => ({ ...f, [pieceId]: { ...f[pieceId], [area]: updated } }))
-    setSaveStatus('saving')
-    clearTimeout(window._saveTimer)
-    window._saveTimer = setTimeout(async () => {
-      await supabase.from('piece_feedback').upsert({
-        piece_id: pieceId, area,
-        feedback: updated.feedback, status: updated.status, sources: updated.sources
-      }, { onConflict: 'piece_id,area' })
-      setSaveStatus('saved')
-      setTimeout(() => setSaveStatus('idle'), 2000)
-    }, 1000)
-  }
-
-  async function toggleSource(pieceId, area, src) {
-    if (!canEdit) return
-    const current = feedback[pieceId]?.[area]?.sources || []
-    const next = current.includes(src) ? current.filter(s => s !== src) : [...current, src]
-    await updateFeedback(pieceId, area, 'sources', next)
-  }
-
-  async function toggleVisibility(pieceId, target) {
-    if (!canShare) return
-    const cur = visibility[pieceId] || { marca: false, casa: false }
-    const next = { ...cur, [target]: !cur[target] }
-    setVisibility(v => ({ ...v, [pieceId]: next }))
-    await supabase.from('piece_visibility').upsert({
-      piece_id: pieceId, visible_to_marca: next.marca, visible_to_casa: next.casa
-    }, { onConflict: 'piece_id' })
-  }
-
-  // Convert feedback string to/from bullet array
-  function feedbackToItems(feedback) {
-    if (!feedback || !feedback.trim()) return []
-    return feedback.split('\n').filter(l => l.trim()).map((l, i) => ({
-      id: i, text: l.replace(/^[·•\-]\s*/, '')
-    }))
-  }
-
-  function itemsToFeedback(items) {
-    return items.map(i => i.text).join('\n')
-  }
-
-  function addComment(pieceId, area) {
-    const current = feedbackToItems(feedback[pieceId]?.[area]?.feedback || '')
-    const next = [...current, { id: Date.now(), text: '' }]
-    updateFeedback(pieceId, area, 'feedback', itemsToFeedback(next))
-  }
-
-  function updateComment(pieceId, area, idx, value) {
-    const current = feedbackToItems(feedback[pieceId]?.[area]?.feedback || '')
-    current[idx] = { ...current[idx], text: value }
-    updateFeedback(pieceId, area, 'feedback', itemsToFeedback(current))
-    // Sync to todos after a short delay
-    clearTimeout(window._todoSyncTimer)
-    window._todoSyncTimer = setTimeout(() => {
-      const piece = pieces.find(p => p.id === pieceId)
-      if (piece && activeProject) syncTodosFromFeedback(pieceId, piece.name, area, current.map((c,i) => i === idx ? {...c, text: value} : c))
-    }, 1500)
-  }
-
-  function deleteComment(pieceId, area, idx) {
-    const current = feedbackToItems(feedback[pieceId]?.[area]?.feedback || '')
-    current.splice(idx, 1)
-    updateFeedback(pieceId, area, 'feedback', itemsToFeedback(current))
-  }
-    const next = { ...projNotes, [field]: value }
-    setProjNotes(next)
-    clearTimeout(window._notesTimer)
-    window._notesTimer = setTimeout(async () => {
-      await supabase.from('project_notes').upsert({ project_id: activeProject.id, ...next }, { onConflict: 'project_id' })
-    }, 1000)
-  }
-
-  // ── MEMBERS ─────────────────────────────────────────────────
-  async function addMember() {
-    if (!newMemberEmail.trim()) return
-    let { data: existingUser } = await supabase.from('users').select('*').eq('email', newMemberEmail).single()
-    if (!existingUser) {
-      const { data: newUser } = await supabase.from('users').insert({ email: newMemberEmail, name: newMemberName, role: newMemberRole }).select().single()
-      existingUser = newUser
+  async function addMbr() {
+    if(!nme.trim()) return
+    let {data:eu}=await supabase.from('users').select('*').eq('email',nme).single()
+    if(!eu) { const {data:nu}=await supabase.from('users').insert({email:nme,name:nmn,role:nmr}).select().single(); eu=nu }
+    if(eu) {
+      await supabase.from('project_members').upsert({project_id:ap.id,user_id:eu.id,role:nmr},{onConflict:'project_id,user_id'})
+      setMbrs(m=>[...m.filter(x=>x.id!==eu.id),{...eu,memberRole:nmr}])
     }
-    if (existingUser) {
-      await supabase.from('project_members').upsert({ project_id: activeProject.id, user_id: existingUser.id, role: newMemberRole }, { onConflict: 'project_id,user_id' })
-      setMembers(m => [...m.filter(mb => mb.id !== existingUser.id), { ...existingUser, memberRole: newMemberRole }])
-    }
-    setShowAddMember(false); setNewMemberEmail(''); setNewMemberName(''); setNewMemberRole('agencia')
+    setSnwm(false); setNme(''); setNmn(''); setNmr('agencia')
   }
-
   async function addPiece() {
-    if (!newPieceName.trim() || !newPieceTag.trim()) return
-    const position = pieces.length + 1
-    const { data } = await supabase.from('pieces').insert({
-      project_id: activeProject.id,
-      tag: newPieceTag.toUpperCase(),
-      name: newPieceName,
-      group_name: newPieceGroup.toLowerCase() || newPieceTag.toLowerCase(),
-      position,
-      status: 'pendiente',
-    }).select().single()
-    if (data) setPieces(p => [...p, data])
-    setShowAddPiece(false); setNewPieceName(''); setNewPieceTag(''); setNewPieceGroup('')
+    if(!npnm.trim()||!nptag.trim()) return
+    const {data}=await supabase.from('pieces').insert({project_id:ap.id,tag:nptag.toUpperCase(),name:npnm,group_name:npgr.toLowerCase()||nptag.toLowerCase(),position:pieces.length+1,status:'pendiente'}).select().single()
+    if(data) setPieces(p=>[...p,data])
+    setSnwpc(false); setNptag(''); setNpnm(''); setNpgr('')
   }
-
-  // ── CLOSE ROUND ─────────────────────────────────────────────
   async function closeRound() {
-    if (!confirm(`¿Cerrar la ronda "${projNotes.ronda || 'actual'}"? Se guardará en el historial.`)) return
-    const snapshot = {
-      project_id: activeProject.id,
-      ronda: projNotes.ronda || 'Sin nombre',
-      fecha: projNotes.fecha || new Date().toLocaleDateString('es-MX'),
-      notas: projNotes.notas,
-      data: { pieces, feedback, approvals, visibility }
-    }
-    const { data } = await supabase.from('snapshots').insert(snapshot).select().single()
-    if (data) setSnapshots(s => [data, ...s])
-    alert(`Ronda "${snapshot.ronda}" guardada en el historial.`)
+    if(!confirm(`¿Cerrar la ronda "${pn.ronda||'actual'}"?`)) return
+    const snap={project_id:ap.id,ronda:pn.ronda||'Sin nombre',fecha:pn.fecha||new Date().toLocaleDateString('es-MX'),notas:pn.notas,data:{pieces,feedback:fb,approvals:approvs,visibility:vis}}
+    const {data}=await supabase.from('snapshots').insert(snap).select().single()
+    if(data) setSnaps(s=>[data,...s])
+    alert(`Ronda "${snap.ronda}" guardada.`)
   }
 
-  // ── VISIBLE PIECES (filtered by role) ───────────────────────
-  const visiblePieces = pieces.filter(p => {
-    if (!userProfile) return false
-    if (userProfile.role === 'marca') return visibility[p.id]?.marca
-    if (userProfile.role === 'casa_productora') return visibility[p.id]?.casa
+  const vp=pieces.filter(p=>{
+    if(!prof) return false
+    if(prof.role==='marca') return vis[p.id]?.marca
+    if(prof.role==='casa_productora') return vis[p.id]?.casa
     return true
-  }).filter(p => filter === 'all' || p.group_name === filter)
+  }).filter(p=>flt==='all'||p.group_name===flt)
 
-  const groups = [...new Set(pieces.map(p => p.group_name).filter(Boolean))]
-  const counts = { pendiente: 0, cambios: 0, aprobado: 0 }
-  visiblePieces.forEach(p => { counts[p.status]++ })
+  const grps=[...new Set(pieces.map(p=>p.group_name).filter(Boolean))]
+  const cnts={pendiente:0,cambios:0,aprobado:0}
+  vp.forEach(p=>{ cnts[p.status]++ })
 
-  // ── AUTH SCREEN — must be before inner components ─────────────
-  if (!user) return (
+  if(!user) return (
     <>
       <Head><title>Roundtable</title><style>{css}</style></Head>
-      <div className="auth-wrap">
-        <div className="auth-box">
-          <p className="auth-logo">Roundtable</p>
-          <h1 className="auth-title">
-            {authMode === 'login' ? 'Bienvenida' : authMode === 'register' ? 'Crear cuenta' : 'Recuperar contraseña'}
-          </h1>
-          <p className="auth-sub">
-            {authMode === 'login' ? 'Entra con tus credenciales' : authMode === 'register' ? 'Completa tu perfil para continuar' : 'Te enviaremos un link a tu correo'}
-          </p>
-          {authMode === 'register' && (
-            <>
-              <label className="auth-label">Nombre completo</label>
-              <input className="auth-input" type="text" placeholder="Tu nombre" value={name} onChange={e=>setName(e.target.value)}/>
-              <label className="auth-label">Rol</label>
-              <select className="auth-input" value={role} onChange={e=>setRole(e.target.value)} style={{cursor:'pointer'}}>
-                <option value="productor">Productor</option>
-                <option value="agencia">Agencia</option>
-                <option value="marca">Marca</option>
-                <option value="casa_productora">Casa Productora</option>
-              </select>
-            </>
-          )}
-          <label className="auth-label">Email</label>
-          <input className="auth-input" type="email" placeholder="tu@email.com" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAuth()}/>
-          {authMode !== 'forgot' && (
-            <>
-              <label className="auth-label">Contraseña</label>
-              <input className="auth-input" type="password" placeholder="••••••••" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==='Enter'&&handleAuth()}/>
-            </>
-          )}
-          {authMode === 'login' && (
-            <p className="auth-forgot">
-              <button onClick={() => { setAuthMode('forgot'); setAuthError(''); setAuthSuccess('') }}>
-                ¿Olvidaste tu contraseña?
-              </button>
-            </p>
-          )}
-          <button className="auth-btn" onClick={handleAuth} disabled={authLoading}>
-            {authLoading ? 'Cargando...' : authMode === 'login' ? 'Entrar' : authMode === 'register' ? 'Crear cuenta' : 'Enviar link de recuperación'}
-          </button>
-          {authError   && <p className="auth-error">{authError}</p>}
-          {authSuccess && <p className="auth-success">{authSuccess}</p>}
-          <p className="auth-toggle">
-            {authMode === 'forgot' ? (
-              <button onClick={() => { setAuthMode('login'); setAuthError(''); setAuthSuccess('') }}>← Volver al login</button>
-            ) : authMode === 'login' ? (
-              <>¿No tienes cuenta? <button onClick={() => { setAuthMode('register'); setAuthError(''); setAuthSuccess('') }}>Regístrate</button></>
-            ) : (
-              <>¿Ya tienes cuenta? <button onClick={() => { setAuthMode('login'); setAuthError(''); setAuthSuccess('') }}>Inicia sesión</button></>
+      <div className="aw">
+        <div className="ab">
+          <p className="alo">Roundtable</p>
+          <h1 className="ati">{aMode==='login'?'Bienvenida':aMode==='register'?'Crear cuenta':'Recuperar contraseña'}</h1>
+          <p className="asu">{aMode==='login'?'Entra con tus credenciales':aMode==='register'?'Completa tu perfil':'Te enviaremos un link a tu correo'}</p>
+          {aMode==='register'&&(<>
+            <label className="al">Nombre completo</label>
+            <input className="ai" type="text" placeholder="Tu nombre" value={nm} onChange={e=>setNm(e.target.value)}/>
+            <label className="al">Rol</label>
+            <select className="ai" value={rl} onChange={e=>setRl(e.target.value)} style={{cursor:'pointer'}}>
+              <option value="productor">Productor</option>
+              <option value="agencia">Agencia</option>
+              <option value="marca">Marca</option>
+              <option value="casa_productora">Casa Productora</option>
+            </select>
+          </>)}
+          <label className="al">Email</label>
+          <input className="ai" type="email" placeholder="tu@email.com" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==='Enter'&&doAuth()}/>
+          {aMode!=='forgot'&&(<>
+            <label className="al">Contraseña</label>
+            <input className="ai" type="password" placeholder="••••••••" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==='Enter'&&doAuth()}/>
+          </>)}
+          {aMode==='login'&&<p className="afg"><button onClick={()=>{setAMode('forgot');setAErr('');setAOk('')}}>¿Olvidaste tu contraseña?</button></p>}
+          <button className="abtn" onClick={doAuth} disabled={aLd}>{aLd?'Cargando...':aMode==='login'?'Entrar':aMode==='register'?'Crear cuenta':'Enviar link'}</button>
+          {aErr&&<p className="aerr">{aErr}</p>}
+          {aOk&&<p className="aok">{aOk}</p>}
+          <p className="atg">
+            {aMode==='forgot'?(
+              <button onClick={()=>{setAMode('login');setAErr('');setAOk('')}}>← Volver al login</button>
+            ):aMode==='login'?(
+              <>¿No tienes cuenta? <button onClick={()=>{setAMode('register');setAErr('');setAOk('')}}>Regístrate</button></>
+            ):(
+              <>¿Ya tienes cuenta? <button onClick={()=>{setAMode('login');setAErr('');setAOk('')}}>Inicia sesión</button></>
             )}
           </p>
         </div>
@@ -759,574 +536,446 @@ export default function Platform() {
     </>
   )
 
-  // ── THERMOMETER ──────────────────────────────────────────────
-  function Thermometer({ pieceId }) {
-    const stateColors = { idle:'#2e2e2e', review:'#60a5fa', adjust:'#fb923c', approved:'#4ade80', received:'#a78bfa', wip:'#fbbf24', delivered:'#4ade80' }
-    return (
-      <div className="thermo-wrap">
-        <span className="thermo-lbl">Flujo de aprobación</span>
-        <div className="thermo">
-          {APPROVAL_ROLES.map((role, i) => {
-            const stKey = approvals[pieceId]?.[role.key] || 'idle'
-            const col = stateColors[stKey] || '#2e2e2e'
-            const isLit = stKey === 'approved' || stKey === 'delivered'
-            return (
-              <div key={role.key} style={{display:'flex',alignItems:'flex-start'}}>
-                <div className="tnode">
-                  <div className="tcircle" onClick={() => updateApproval(pieceId, role.key)}
-                    style={{borderColor:stKey==='idle'?'#2e2e2e':col, color:col, background:stKey==='idle'?'var(--surface2)':`${col}18`}}>
-                    {role.icons[stKey] || role.icons.idle}
-                  </div>
-                  <span className="trole" style={{color:role.color}}>{role.label}</span>
-                  <span className="tbadge" onClick={() => updateApproval(pieceId, role.key)}
-                    style={{borderColor:stKey==='idle'?'var(--border)':col, color:stKey==='idle'?'var(--muted)':col, background:stKey==='idle'?'transparent':`${col}15`}}>
-                    {role.labels[stKey]}
-                  </span>
-                </div>
-                {i < APPROVAL_ROLES.length - 1 && <div className={`tconn ${isLit?'lit':''}`}/>}
-              </div>
-            )
-          })}
-        </div>
-      </div>
-    )
-  }
+  const pending=todos.filter(t=>!t.completed)
+  const done=todos.filter(t=>t.completed)
+  const tgroups={}
+  pending.forEach(t=>{ const k=t.piece_name||'General'; if(!tgroups[k]) tgroups[k]=[]; tgroups[k].push(t) })
 
-  // ── PIECE CARD ───────────────────────────────────────────────
-  function PieceCard({ piece }) {
-    const isOpen = !!openCards[piece.id]
-    const isHistOpen = !!openHist[piece.id]
-    const pieceFb = feedback[piece.id] || {}
-    const pieceVis = visibility[piece.id] || { marca: false, casa: false }
-    const sc = STATUS_COLORS[piece.status] || '#60a5fa'
-
-    return (
-      <div className="piece-card">
-        <div className="piece-hdr" onClick={() => setOpenCards(o => ({ ...o, [piece.id]: !o[piece.id] }))}>
-          <span className="piece-tag">{piece.tag}</span>
-          <span className="piece-name">{piece.name}</span>
-          {canShare && (
-            <div className="vis-badges">
-              {pieceVis.marca && <span className="vis-badge" style={{borderColor:'#e879f940',color:'#e879f9',background:'rgba(232,121,249,.08)'}}>Marca</span>}
-              {pieceVis.casa  && <span className="vis-badge" style={{borderColor:'#4ade8040',color:'#4ade80',background:'rgba(74,222,128,.08)'}}>Casa</span>}
-            </div>
-          )}
-          <div className="area-dots">
-            {AREAS.map(a => <div key={a.key} className={`adot ${pieceFb[a.key]?.feedback?.trim().length>0?'lit':''}`} style={{background:a.color}}/>)}
-          </div>
-          <button className="spill" onClick={e=>{e.stopPropagation(); if(canEdit) updatePieceStatus(piece.id, STATUS_OPTIONS[piece.status])}}
-            style={{background:`${sc}12`,color:sc}}>
-            <span className="sdot" style={{background:sc}}/>{STATUS_LABELS[piece.status]}
-          </button>
-          <span className={`chev ${isOpen?'open':''}`}>▼</span>
-        </div>
-
-        <div className={`piece-body ${isOpen?'open':''}`}>
-          {/* SHARE BAR */}
-          {canShare && (
-            <div className="share-bar">
-              <span className="share-lbl">Compartir con</span>
-              <button className={`share-btn ${pieceVis.marca?'active-marca':''}`} onClick={() => toggleVisibility(piece.id,'marca')}>
-                {pieceVis.marca?'✓ ':''} Marca
-              </button>
-              <button className={`share-btn ${pieceVis.casa?'active-casa':''}`} onClick={() => toggleVisibility(piece.id,'casa')}>
-                {pieceVis.casa?'✓ ':''} Casa Prod.
-              </button>
-            </div>
-          )}
-
-          <Thermometer pieceId={piece.id}/>
-
-          {/* PRIORITY */}
-          {canEdit && (
-            <div className="prio-wrap">
-              <span className="sec-lbl">Prioridad</span>
-              <div className="prio-row">
-                {[['alta','🔴','#f87171'],['media','🟡','#fb923c'],['baja','🔵','#60a5fa']].map(([p,e,c]) => (
-                  <button key={p} className="prio-btn" onClick={() => updatePiecePriority(piece.id, p)}
-                    style={piece.priority===p?{background:`${c}18`,borderColor:c,color:c}:{}}>
-                    {e} {p.charAt(0).toUpperCase()+p.slice(1)}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* AREAS */}
-          <div className="areas-grid">
-            {AREAS.filter(a => a.key !== 'vfx').map(a => {
-              const af = pieceFb[a.key] || { feedback:'', status:'pendiente', sources:[] }
-              return (
-                <div key={a.key} className="area-sec">
-                  <div className="area-hdr">
-                    <div className="area-dot-sm" style={{background:a.color}}/>
-                    <span className="area-name" style={{color:a.color}}>{a.label}</span>
-                    {canEdit && (
-                      <select className="area-sel" value={af.status} onChange={e=>updateFeedback(piece.id,a.key,'status',e.target.value)}>
-                        <option value="pendiente">Pendiente</option>
-                        <option value="cambios">Cambios</option>
-                        <option value="aprobado">Aprobado</option>
-                        <option value="na">N/A</option>
-                      </select>
-                    )}
-                  </div>
-                  {canEdit && (
-                    <div className="src-row">
-                      <span className="src-lbl">Fuente</span>
-                      {SOURCE_OPTIONS.map(s => (
-                        <button key={s.key} className="src-btn" onClick={() => toggleSource(piece.id,a.key,s.key)}
-                          style={af.sources?.includes(s.key)?{borderColor:s.color,color:s.color,background:`${s.color}15`}:{}}>
-                          {s.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <div className="comments-list">
-                    {feedbackToItems(af.feedback).map((item, idx) => (
-                      <div key={item.id} className="comment-item">
-                        <span className="comment-bullet">·</span>
-                        <textarea className="comment-input"
-                          placeholder="Escribe el comentario..."
-                          value={item.text}
-                          readOnly={!canEdit}
-                          rows={1}
-                          onChange={e => {
-                            e.target.style.height = 'auto'
-                            e.target.style.height = e.target.scrollHeight + 'px'
-                            updateComment(piece.id, a.key, idx, e.target.value)
-                          }}
-                        />
-                        {canEdit && <button className="comment-del" onClick={() => deleteComment(piece.id, a.key, idx)}>✕</button>}
-                      </div>
-                    ))}
-                  </div>
-                  {canEdit && (
-                    <button className="add-comment-btn" onClick={() => addComment(piece.id, a.key)}>
-                      + Agregar comentario
-                    </button>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* VFX */}
-          <div className="vfx-wrap">
-            <div className="vfx-hdr">
-              <div className="area-dot-sm" style={{background:'#f97316'}}/>
-              <span className="area-name" style={{color:'#f97316',flex:1}}>VFX</span>
-              {canEdit && (
-                <>
-                  <select className="area-sel" value={pieceFb.vfx?.status||'pendiente'} onChange={e=>updateFeedback(piece.id,'vfx','status',e.target.value)}>
-                    <option value="pendiente">Pendiente</option>
-                    <option value="cambios">Cambios</option>
-                    <option value="aprobado">Aprobado</option>
-                    <option value="na">N/A</option>
-                  </select>
-                  <div className="src-row" style={{margin:'0 0 0 8px'}}>
-                    {SOURCE_OPTIONS.map(s => (
-                      <button key={s.key} className="src-btn" onClick={() => toggleSource(piece.id,'vfx',s.key)}
-                        style={pieceFb.vfx?.sources?.includes(s.key)?{borderColor:s.color,color:s.color,background:`${s.color}15`}:{}}>
-                        {s.label}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="comments-list">
-              {feedbackToItems(pieceFb.vfx?.feedback||'').map((item, idx) => (
-                <div key={item.id} className="comment-item">
-                  <span className="comment-bullet">·</span>
-                  <textarea className="comment-input"
-                    placeholder="Escribe el comentario..."
-                    value={item.text}
-                    readOnly={!canEdit}
-                    rows={1}
-                    onChange={e => {
-                      e.target.style.height = 'auto'
-                      e.target.style.height = e.target.scrollHeight + 'px'
-                      updateComment(piece.id, 'vfx', idx, e.target.value)
-                    }}
-                  />
-                  {canEdit && <button className="comment-del" onClick={() => deleteComment(piece.id, 'vfx', idx)}>✕</button>}
-                </div>
-              ))}
-            </div>
-            {canEdit && (
-              <button className="add-comment-btn" onClick={() => addComment(piece.id, 'vfx')}>
-                + Agregar comentario
-              </button>
-            )}
-          </div>
-
-          {/* HISTORY toggle */}
-          <div className="hist-wrap">
-            <button className="hist-toggle" onClick={() => setOpenHist(o => ({ ...o, [piece.id]: !o[piece.id] }))}>
-              {isHistOpen ? '▾ Ocultar historial' : '▸ Ver historial de rondas'}
-            </button>
-            <div className={`hist-list ${isHistOpen ? 'open' : ''}`}>
-              {snapshots.map(snap => {
-                const snapPiece = snap.data?.pieces?.find(p => p.name === piece.name)
-                const snapFb = snap.data?.feedback?.[snapPiece?.id]
-                if (!snapPiece && !snapFb) return null
-                return (
-                  <div key={snap.id} className="hist-row">
-                    <span className="hist-rnd">{snap.ronda}</span>
-                    <span className="hist-txt">{snap.fecha} — {STATUS_LABELS[snapPiece?.status] || '—'}</span>
-                  </div>
-                )
-              })}
-              {!snapshots.length && <p style={{fontSize:'11px',color:'var(--muted)',paddingTop:'6px'}}>Sin historial aún.</p>}
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // ── TODOS PANEL ──────────────────────────────────────────────
-  function TodosPanel() {
-    const areaColors2 = { edit:'#a78bfa', color:'#f472b6', audio:'#34d399', online:'#fbbf24', vfx:'#f97316', general:'#60a5fa' }
-    const areaLabels2 = { edit:'Edición', color:'Color', audio:'Audio', online:'Online', vfx:'VFX', general:'General' }
-    const pending   = todos.filter(t => !t.completed)
-    const completed = todos.filter(t => t.completed)
-
-    // Group pending by piece
-    const groups = {}
-    pending.forEach(t => {
-      const key = t.piece_name || 'General'
-      if (!groups[key]) groups[key] = []
-      groups[key].push(t)
-    })
-
-    return (
-      <div className="todos-panel">
-        <div className="todos-header">
-          <span className="todos-title">Pendientes</span>
-          <div className="todos-counts">
-            <span className="todos-count-chip" style={{background:'rgba(251,146,60,.1)',color:'#fb923c'}}>
-              {pending.length} pendientes
-            </span>
-            <span className="todos-count-chip" style={{background:'rgba(74,222,128,.1)',color:'#4ade80'}}>
-              {completed.length} listos
-            </span>
-          </div>
-        </div>
-
-        <div className="todos-list">
-          {pending.length === 0 && completed.length === 0 && (
-            <div className="todos-empty">
-              <p>Sin pendientes aún.</p>
-              <p style={{marginTop:'6px',fontSize:'11px'}}>Los comentarios de feedback aparecerán aquí automáticamente.</p>
-            </div>
-          )}
-
-          {Object.entries(groups).map(([pieceName, items]) => (
-            <div key={pieceName} className="todo-group">
-              <span className="todo-group-label">
-                <span className="todo-group-dot" style={{background:'var(--accent)'}}/>
-                {pieceName}
-              </span>
-              {items.map(todo => (
-                <div key={todo.id} className="todo-item">
-                  <div className={`todo-check ${todo.completed?'done':''}`}
-                    onClick={() => toggleTodo(todo.id)}
-                    style={{cursor: canManage ? 'pointer' : 'default'}}>
-                    {todo.completed && '✓'}
-                  </div>
-                  <span className={`todo-text ${todo.completed?'done':''}`}>{todo.text}</span>
-                  {todo.area && todo.area !== 'general' && (
-                    <span className="todo-area-tag" style={{background:`${areaColors2[todo.area]}15`,color:areaColors2[todo.area]}}>
-                      {areaLabels2[todo.area]||todo.area}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          ))}
-
-          {completed.length > 0 && (
-            <div className="todo-group">
-              <span className="todo-group-label" style={{color:'#333'}}>
-                <span className="todo-group-dot" style={{background:'#4ade80'}}/>
-                Completados
-              </span>
-              {completed.map(todo => (
-                <div key={todo.id} className="todo-item">
-                  <div className="todo-check done" onClick={() => toggleTodo(todo.id)} style={{cursor: canManage?'pointer':'default'}}>✓</div>
-                  <span className="todo-text done">{todo.text}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {canManage && (
-          <div className="todos-add">
-            <input className="todos-add-input" placeholder="Agregar pendiente manual..."
-              value={newTodoText} onChange={e=>setNewTodoText(e.target.value)}
-              onKeyDown={e=>e.key==='Enter'&&addManualTodo()}/>
-            <button className="todos-add-btn" onClick={addManualTodo}>+ Agregar pendiente</button>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  // ── APP ──────────────────────────────────────────────────────
   return (
     <>
       <Head><title>Roundtable</title><style>{css}</style></Head>
       <div className="shell">
-
-        {/* SIDEBAR */}
-        <div className="sidebar">
-          <div className="sidebar-logo">
-            <p className="sidebar-logo-tag">Production Platform</p>
-            <p className="sidebar-logo-name">Dashboard</p>
+        <div className="sb">
+          <div className="sb-logo">
+            <p className="sb-tag">Roundtable</p>
+            <p className="sb-nm">Dashboard</p>
           </div>
-          <nav className="sidebar-nav">
-            <p className="sidebar-section">Proyectos</p>
-            <button className={`nav-item ${view==='dashboard'?'active':''}`} onClick={()=>{setView('dashboard');setActiveProject(null)}}>
-              <span className="nav-item-dot" style={{background:'var(--accent)'}}/>Todos los proyectos
+          <nav className="sb-nav">
+            <p className="sb-sec">Proyectos</p>
+            <button className={`ni ${view==='dashboard'?'active':''}`} onClick={()=>{setView('dashboard');setAp(null)}}>
+              <span className="nd" style={{background:'var(--ac)'}}/>Todos los proyectos
             </button>
-            {projects.map(p => (
-              <button key={p.id} className={`nav-item ${activeProject?.id===p.id?'active':''}`} onClick={()=>openProject(p)}>
-                <span className="nav-item-dot" style={{background:'#60a5fa'}}/>{p.name}
+            {projs.map(p=>(
+              <button key={p.id} className={`ni ${ap?.id===p.id?'active':''}`} onClick={()=>openProj(p)}>
+                <span className="nd" style={{background:'#60a5fa'}}/>{p.name}
               </button>
             ))}
-            {canManage && (
-              <button className="nav-item" onClick={()=>setShowNewProj(true)} style={{color:'var(--accent)',opacity:.7}}>
-                <span style={{fontSize:'14px'}}>+</span> Nuevo proyecto
-              </button>
-            )}
+            {canManage&&<button className="ni" onClick={()=>setSnwp(true)} style={{color:'var(--ac)',opacity:.7}}><span style={{fontSize:'14px'}}>+</span> Nuevo proyecto</button>}
           </nav>
-          <div className="sidebar-user">
-            <p className="sidebar-user-name">{userProfile?.name || user.email}</p>
-            <p className="sidebar-user-role" style={{color:ROLES[userProfile?.role]?.color||'var(--muted)'}}>{ROLES[userProfile?.role]?.label||''}</p>
-            <button className="sidebar-user-out" onClick={handleLogout}>Cerrar sesión</button>
+          <div className="sb-u">
+            <p className="sb-un">{prof?.name||user.email}</p>
+            <p className="sb-ur" style={{color:ROLES[prof?.role]?.color||'var(--mu)'}}>{ROLES[prof?.role]?.label||''}</p>
+            <button className="sb-out" onClick={logout}>Cerrar sesión</button>
           </div>
         </div>
 
-        {/* MAIN */}
         <div className="main">
           <div className="topbar">
-            <span className="topbar-title">
-              {view === 'dashboard' ? 'Mis proyectos' : activeProject?.name}
-            </span>
-            <div className="topbar-meta">
-              {saveStatus==='saving' && <span className="save-ind" style={{color:'var(--accent)'}}>● Guardando…</span>}
-              {saveStatus==='saved'  && <span className="save-ind" style={{color:'#4ade80'}}>✓ Guardado</span>}
+            <span className="tt">{view==='dashboard'?'Mis proyectos':ap?.name}</span>
+            <div className="tm">
+              {sv==='saving'&&<span className="si" style={{color:'var(--ac)'}}>● Guardando…</span>}
+              {sv==='saved'&&<span className="si" style={{color:'#4ade80'}}>✓ Guardado</span>}
             </div>
           </div>
 
-          <div className="content-area">
+          <div className="ca">
             <div className="page">
 
-            {/* DASHBOARD */}
-            {view === 'dashboard' && (
-              <>
-                <div className="dash-grid">
-                  {projects.map(p => {
-                    return (
-                      <div key={p.id} className="proj-card" onClick={()=>openProject(p)}>
-                        <p className="proj-card-tag">Proyecto activo</p>
-                        <h2 className="proj-card-name">{p.name}</h2>
-                        <p className="proj-card-client">{p.client}</p>
-                      </div>
-                    )
-                  })}
-                  {canManage && (
-                    <button className="new-proj-card" onClick={()=>setShowNewProj(true)}>
-                      <span className="new-proj-icon">+</span>
-                      <span className="new-proj-label">Nuevo proyecto</span>
-                    </button>
-                  )}
-                  {!projects.length && !canManage && (
-                    <div className="empty-state">
-                      <h3>Sin proyectos asignados</h3>
-                      <p>El productor te agregará a un proyecto pronto.</p>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-
-            {/* PROJECT VIEW */}
-            {view === 'project' && activeProject && (
-              <>
-                <div className="proj-header">
-                  <div className="proj-header-left">
-                    <h1>{activeProject.name}</h1>
-                    <p>{activeProject.client}</p>
-                  </div>
-                  <div className="proj-header-right">
-                    {canEdit && (
-                      <>
-                        <input className="modal-input" style={{width:'110px'}} placeholder="Fecha" value={projNotes.fecha} onChange={e=>updateProjNotes('fecha',e.target.value)}/>
-                        <input className="modal-input" style={{width:'90px'}} placeholder="Ronda" value={projNotes.ronda} onChange={e=>updateProjNotes('ronda',e.target.value)}/>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* SUMMARY */}
-                <div className="summary-row">
-                  {Object.entries(STATUS_LABELS).map(([s,l]) => (
-                    <div key={s} className="sum-chip">
-                      <span className="sum-count" style={{color:STATUS_COLORS[s]}}>{counts[s]||0}</span>
-                      <span className="sum-lbl">{l}</span>
+              {view==='dashboard'&&(
+                <div className="dg">
+                  {projs.map(p=>(
+                    <div key={p.id} className="pc" onClick={()=>openProj(p)}>
+                      <p className="pct">Proyecto activo</p>
+                      <h2 className="pcn">{p.name}</h2>
+                      <p className="pcc">{p.client}</p>
                     </div>
                   ))}
-                </div>
-
-                {/* FILTERS */}
-                <div className="filter-row">
-                  <span className="filter-lbl">Filtrar</span>
-                  <button className={`ftab ${filter==='all'?'active':''}`} onClick={()=>setFilter('all')}>Todas</button>
-                  {groups.map(g => <button key={g} className={`ftab ${filter===g?'active':''}`} onClick={()=>setFilter(g)}>{g}</button>)}
-                </div>
-
-                {/* PIECES */}
-                <div className="pieces-list">
-                  {visiblePieces.length === 0 && (
-                    <div className="empty-state">
-                      <h3>Sin piezas</h3>
-                      <p>{canManage ? 'Agrega las piezas de este proyecto.' : 'No hay piezas compartidas contigo aún.'}</p>
-                      {canManage && (
-                        <button className="btn-primary" style={{marginTop:'16px'}} onClick={()=>setShowAddPiece(true)}>
-                          + Agregar pieza
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  {visiblePieces.map(p => <PieceCard key={p.id} piece={p}/>)}
-                  {canManage && visiblePieces.length > 0 && (
-                    <button className="nav-item" style={{color:'var(--accent)',opacity:.8,marginTop:'8px'}} onClick={()=>setShowAddPiece(true)}>
-                      <span>+</span> Agregar pieza
+                  {canManage&&(
+                    <button className="np" onClick={()=>setSnwp(true)}>
+                      <span style={{fontSize:'24px'}}>+</span>
+                      <span style={{fontSize:'12px',fontFamily:'DM Mono,monospace',textTransform:'uppercase',letterSpacing:'.08em'}}>Nuevo proyecto</span>
                     </button>
                   )}
+                  {!projs.length&&!canManage&&<div className="es"><h3>Sin proyectos asignados</h3><p>El productor te agregará pronto.</p></div>}
                 </div>
+              )}
 
-                {/* FOOTER */}
-                {canEdit && (
-                  <div className="proj-footer">
-                    <span className="sec-lbl">Notas generales de la ronda</span>
-                    <textarea className="notes-ta" placeholder="Observaciones generales..." value={projNotes.notas} onChange={e=>updateProjNotes('notas',e.target.value)}/>
-                    <div className="btn-row">
-                      <button className="btn-primary" onClick={closeRound}>Cerrar ronda y guardar historial</button>
-                      <button className="btn-accent" onClick={()=>alert('Export próximamente')}>Exportar resumen</button>
+              {view==='project'&&ap&&(
+                <>
+                  <div className="ph">
+                    <div className="phl"><h1>{ap.name}</h1><p>{ap.client}</p></div>
+                    <div className="phr">
+                      {canEdit&&(<>
+                        <input className="mdi" style={{width:'110px'}} placeholder="Fecha" value={pn.fecha} onChange={e=>upNotes('fecha',e.target.value)}/>
+                        <input className="mdi" style={{width:'90px'}} placeholder="Ronda" value={pn.ronda} onChange={e=>upNotes('ronda',e.target.value)}/>
+                      </>)}
                     </div>
                   </div>
-                )}
 
-                {/* MEMBERS */}
-                {canManage && (
-                  <div className="members-wrap">
-                    <span className="members-title">Equipo del proyecto</span>
-                    {members.map(m => (
-                      <div key={m.id} className="member-row">
-                        <div className="member-avatar" style={{background:`${ROLES[m.memberRole]?.color||'#555'}20`,color:ROLES[m.memberRole]?.color||'#555'}}>
-                          {initials(m.name||m.email)}
-                        </div>
-                        <div style={{flex:1}}>
-                          <p className="member-name">{m.name||'—'}</p>
-                          <p className="member-email">{m.email}</p>
-                        </div>
-                        <span className="member-role-badge" style={{borderColor:`${ROLES[m.memberRole]?.color||'#555'}40`,color:ROLES[m.memberRole]?.color||'#555'}}>
-                          {ROLES[m.memberRole]?.label||m.memberRole}
-                        </span>
-                      </div>
-                    ))}
-                    <button className="nav-item" style={{marginTop:'8px',color:'var(--accent)',opacity:.8}} onClick={()=>setShowAddMember(true)}>
-                      <span>+</span> Agregar persona
-                    </button>
-                  </div>
-                )}
-
-                {/* SNAPSHOTS */}
-                {snapshots.length > 0 && (
-                  <div className="snaps-wrap">
-                    <span className="members-title">Historial de rondas</span>
-                    {snapshots.map(snap => (
-                      <div key={snap.id} className="snap-card">
-                        <div className="snap-hdr" onClick={()=>setOpenSnaps(o=>({...o,[snap.id]:!o[snap.id]}))}>
-                          <span className="snap-ronda">{snap.ronda}</span>
-                          <span className="snap-fecha">{snap.fecha}</span>
-                          <span style={{color:'var(--muted)',fontSize:'10px'}}>{openSnaps[snap.id]?'▲':'▼'}</span>
-                        </div>
-                        <div className={`snap-body ${openSnaps[snap.id]?'open':''}`}>
-                          {snap.notas && <p style={{fontSize:'12px',color:'var(--mid)',marginBottom:'10px',fontStyle:'italic'}}>{snap.notas}</p>}
-                          <p style={{fontSize:'11px',color:'var(--muted)'}}>Snapshot guardado el {snap.fecha}</p>
-                        </div>
+                  <div className="sr">
+                    {Object.entries(SL).map(([s,l])=>(
+                      <div key={s} className="sch">
+                        <span className="scn" style={{color:SC[s]}}>{cnts[s]||0}</span>
+                        <span className="scl">{l}</span>
                       </div>
                     ))}
                   </div>
+
+                  <div className="fr">
+                    <span className="fl">Filtrar</span>
+                    <button className={`ft ${flt==='all'?'active':''}`} onClick={()=>setFlt('all')}>Todas</button>
+                    {grps.map(g=><button key={g} className={`ft ${flt===g?'active':''}`} onClick={()=>setFlt(g)}>{g}</button>)}
+                  </div>
+
+                  <div className="pl">
+                    {vp.length===0&&(
+                      <div className="es">
+                        <h3>Sin piezas</h3>
+                        <p>{canManage?'Agrega las piezas de este proyecto.':'No hay piezas compartidas contigo aún.'}</p>
+                        {canManage&&<button className="bp" style={{marginTop:'16px'}} onClick={()=>setSnwpc(true)}>+ Agregar pieza</button>}
+                      </div>
+                    )}
+                    {vp.map(piece=>{
+                      const isO=!!oc[piece.id]
+                      const isH=!!oh[piece.id]
+                      const pf2=fb[piece.id]||{}
+                      const pv2=vis[piece.id]||{marca:false,casa:false}
+                      const sc2=SC[piece.status]||'#60a5fa'
+                      return (
+                        <div key={piece.id} className="pcard">
+                          <div className="phdr" onClick={()=>setOc(o=>({...o,[piece.id]:!o[piece.id]}))}>
+                            <span className="ptag">{piece.tag}</span>
+                            <span className="pnm">{piece.name}</span>
+                            {canShare&&(
+                              <div className="vbs">
+                                {pv2.marca&&<span className="vb" style={{borderColor:'#e879f940',color:'#e879f9',background:'rgba(232,121,249,.08)'}}>Marca</span>}
+                                {pv2.casa&&<span className="vb" style={{borderColor:'#4ade8040',color:'#4ade80',background:'rgba(74,222,128,.08)'}}>Casa</span>}
+                              </div>
+                            )}
+                            <div className="ads">
+                              {AREAS.map(a=><div key={a.key} className={`ad ${pf2[a.key]?.feedback?.trim().length>0?'lit':''}`} style={{background:a.color}}/>)}
+                              <div className={`ad ${pf2.vfx?.feedback?.trim().length>0?'lit':''}`} style={{background:'#f97316'}}/>
+                            </div>
+                            <button className="sp" onClick={e=>{e.stopPropagation();if(canEdit)upStatus(piece.id,SCYCLE[piece.status])}} style={{background:`${sc2}12`,color:sc2}}>
+                              <span className="spd" style={{background:sc2}}/>{SL[piece.status]}
+                            </button>
+                            <span className={`cv ${isO?'open':''}`}>▼</span>
+                          </div>
+
+                          <div className={`pbody ${isO?'open':''}`}>
+                            {canShare&&(
+                              <div className="shbar">
+                                <span className="shlbl">Compartir con</span>
+                                <button className={`shbtn ${pv2.marca?'m':''}`} onClick={()=>togVis(piece.id,'marca')}>{pv2.marca?'✓ ':''}Marca</button>
+                                <button className={`shbtn ${pv2.casa?'c':''}`} onClick={()=>togVis(piece.id,'casa')}>{pv2.casa?'✓ ':''}Casa Prod.</button>
+                              </div>
+                            )}
+
+                            <div className="twrap">
+                              <span className="tlbl">Flujo de aprobación</span>
+                              <div className="thermo">
+                                {APPROVAL_ROLES.map((r,i)=>{
+                                  const sk=approvs[piece.id]?.[r.key]||'idle'
+                                  const rc={idle:'#2e2e2e',review:'#60a5fa',adjust:'#fb923c',approved:'#4ade80',received:'#a78bfa',wip:'#fbbf24',delivered:'#4ade80'}[sk]||'#2e2e2e'
+                                  const lit=sk==='approved'||sk==='delivered'
+                                  return (
+                                    <div key={r.key} style={{display:'flex',alignItems:'flex-start'}}>
+                                      <div className="tn">
+                                        <div className="tci" onClick={()=>upApproval(piece.id,r.key)} style={{borderColor:sk==='idle'?'#2e2e2e':rc,color:rc,background:sk==='idle'?'var(--s2)':`${rc}18`}}>
+                                          {r.icons[sk]||r.icons.idle}
+                                        </div>
+                                        <span className="trl" style={{color:r.color}}>{r.label}</span>
+                                        <span className="tbg" onClick={()=>upApproval(piece.id,r.key)} style={{borderColor:sk==='idle'?'var(--bd)':rc,color:sk==='idle'?'var(--mu)':rc,background:sk==='idle'?'transparent':`${rc}15`}}>
+                                          {r.labels[sk]}
+                                        </span>
+                                      </div>
+                                      {i<APPROVAL_ROLES.length-1&&<div className={`tc ${lit?'lit':''}`}/>}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+
+                            {canEdit&&(
+                              <div className="pw">
+                                <span className="slbl">Prioridad</span>
+                                <div className="pr">
+                                  {[['alta','🔴','#f87171'],['media','🟡','#fb923c'],['baja','🔵','#60a5fa']].map(([p,e,c])=>(
+                                    <button key={p} className="pb" onClick={()=>upPriority(piece.id,p)} style={piece.priority===p?{background:`${c}18`,borderColor:c,color:c}:{}}>
+                                      {e} {p.charAt(0).toUpperCase()+p.slice(1)}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="ag">
+                              {AREAS.map(a=>{
+                                const af=pf2[a.key]||{feedback:'',status:'pendiente',sources:[]}
+                                const items=fbToItems(af.feedback)
+                                return (
+                                  <div key={a.key} className="as">
+                                    <div className="ah">
+                                      <div className="ads2" style={{background:a.color}}/>
+                                      <span className="an" style={{color:a.color}}>{a.label}</span>
+                                      {canEdit&&(
+                                        <select className="asel" value={af.status} onChange={e=>upFb(piece.id,a.key,'status',e.target.value)}>
+                                          <option value="pendiente">Pendiente</option>
+                                          <option value="cambios">Cambios</option>
+                                          <option value="aprobado">Aprobado</option>
+                                          <option value="na">N/A</option>
+                                        </select>
+                                      )}
+                                    </div>
+                                    {canEdit&&(
+                                      <div className="srcr">
+                                        <span className="srclbl">Fuente</span>
+                                        {SOURCES.map(s=>(
+                                          <button key={s.key} className="srcbtn" onClick={()=>togSrc(piece.id,a.key,s.key)} style={af.sources?.includes(s.key)?{borderColor:s.color,color:s.color,background:`${s.color}15`}:{}}>
+                                            {s.label}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                    <div className="cl">
+                                      {items.map((item,idx)=>(
+                                        <div key={item.id} className="ci">
+                                          <span className="cb">·</span>
+                                          <textarea className="cin" placeholder="Escribe el comentario..." value={item.text} readOnly={!canEdit} rows={1}
+                                            onChange={e=>{e.target.style.height='auto';e.target.style.height=e.target.scrollHeight+'px';upCmt(piece.id,a.key,idx,e.target.value)}}/>
+                                          {canEdit&&<button className="cdl" onClick={()=>delCmt(piece.id,a.key,idx)}>✕</button>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {canEdit&&<button className="acb" onClick={()=>addCmt(piece.id,a.key)}>+ Agregar comentario</button>}
+                                  </div>
+                                )
+                              })}
+                            </div>
+
+                            <div className="vw">
+                              <div className="vh">
+                                <div className="ads2" style={{background:'#f97316'}}/>
+                                <span className="an" style={{color:'#f97316',flex:1}}>VFX</span>
+                                {canEdit&&(<>
+                                  <select className="asel" value={pf2.vfx?.status||'pendiente'} onChange={e=>upFb(piece.id,'vfx','status',e.target.value)}>
+                                    <option value="pendiente">Pendiente</option>
+                                    <option value="cambios">Cambios</option>
+                                    <option value="aprobado">Aprobado</option>
+                                    <option value="na">N/A</option>
+                                  </select>
+                                  <div className="srcr" style={{margin:'0 0 0 8px'}}>
+                                    {SOURCES.map(s=>(
+                                      <button key={s.key} className="srcbtn" onClick={()=>togSrc(piece.id,'vfx',s.key)} style={pf2.vfx?.sources?.includes(s.key)?{borderColor:s.color,color:s.color,background:`${s.color}15`}:{}}>
+                                        {s.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </>)}
+                              </div>
+                              <div className="cl">
+                                {fbToItems(pf2.vfx?.feedback||'').map((item,idx)=>(
+                                  <div key={item.id} className="ci">
+                                    <span className="cb">·</span>
+                                    <textarea className="cin" placeholder="Escribe el comentario..." value={item.text} readOnly={!canEdit} rows={1}
+                                      onChange={e=>{e.target.style.height='auto';e.target.style.height=e.target.scrollHeight+'px';upCmt(piece.id,'vfx',idx,e.target.value)}}/>
+                                    {canEdit&&<button className="cdl" onClick={()=>delCmt(piece.id,'vfx',idx)}>✕</button>}
+                                  </div>
+                                ))}
+                              </div>
+                              {canEdit&&<button className="acb" onClick={()=>addCmt(piece.id,'vfx')}>+ Agregar comentario</button>}
+                            </div>
+
+                            <div className="hw">
+                              <button className="htg" onClick={()=>setOh(o=>({...o,[piece.id]:!o[piece.id]}))}>
+                                {isH?'▾ Ocultar historial':'▸ Ver historial de rondas'}
+                              </button>
+                              <div className={`hl ${isH?'open':''}`}>
+                                {snaps.length===0&&<p style={{fontSize:'11px',color:'var(--mu)',paddingTop:'6px'}}>Sin historial aún.</p>}
+                                {snaps.map(s2=>(
+                                  <div key={s2.id} className="hr">
+                                    <span className="hrn">{s2.ronda}</span>
+                                    <span className="hrt">{s2.fecha}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {canManage&&vp.length>0&&(
+                      <button className="ni" style={{color:'var(--ac)',opacity:.8,marginTop:'8px'}} onClick={()=>setSnwpc(true)}>
+                        <span>+</span> Agregar pieza
+                      </button>
+                    )}
+                  </div>
+
+                  {canEdit&&(
+                    <div className="pf">
+                      <span className="slbl">Notas generales de la ronda</span>
+                      <textarea className="nta" placeholder="Observaciones generales..." value={pn.notas} onChange={e=>upNotes('notas',e.target.value)}/>
+                      <div className="br">
+                        <button className="bp" onClick={closeRound}>Cerrar ronda y guardar historial</button>
+                        <button className="ba">Exportar resumen</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {canManage&&(
+                    <div className="mw">
+                      <span className="mt">Equipo del proyecto</span>
+                      {mbrs.map(m=>(
+                        <div key={m.id} className="mr">
+                          <div className="mav" style={{background:`${ROLES[m.memberRole]?.color||'#555'}20`,color:ROLES[m.memberRole]?.color||'#555'}}>
+                            {initials(m.name||m.email)}
+                          </div>
+                          <div style={{flex:1}}>
+                            <p className="mn">{m.name||'—'}</p>
+                            <p className="me">{m.email}</p>
+                          </div>
+                          <span className="mrl" style={{borderColor:`${ROLES[m.memberRole]?.color||'#555'}40`,color:ROLES[m.memberRole]?.color||'#555'}}>
+                            {ROLES[m.memberRole]?.label||m.memberRole}
+                          </span>
+                        </div>
+                      ))}
+                      <button className="ni" style={{marginTop:'8px',color:'var(--ac)',opacity:.8}} onClick={()=>setSnwm(true)}>
+                        <span>+</span> Agregar persona
+                      </button>
+                    </div>
+                  )}
+
+                  {snaps.length>0&&(
+                    <div className="sw">
+                      <span className="mt">Historial de rondas</span>
+                      {snaps.map(s2=>(
+                        <div key={s2.id} className="sc2">
+                          <div className="sh2" onClick={()=>setOs(o=>({...o,[s2.id]:!o[s2.id]}))}>
+                            <span className="sr2">{s2.ronda}</span>
+                            <span className="sf2">{s2.fecha}</span>
+                            <span style={{color:'var(--mu)',fontSize:'10px'}}>{os[s2.id]?'▲':'▼'}</span>
+                          </div>
+                          <div className={`sb2 ${os[s2.id]?'open':''}`}>
+                            {s2.notas&&<p style={{fontSize:'12px',color:'var(--mi)',fontStyle:'italic'}}>{s2.notas}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {view==='project'&&ap&&(
+              <div className="tp">
+                <div className="tph">
+                  <span className="tpt">Pendientes</span>
+                  <div className="tpcs">
+                    <span className="tpch" style={{background:'rgba(251,146,60,.1)',color:'#fb923c'}}>{pending.length} pendientes</span>
+                    <span className="tpch" style={{background:'rgba(74,222,128,.1)',color:'#4ade80'}}>{done.length} listos</span>
+                  </div>
+                </div>
+                <div className="tpl">
+                  {pending.length===0&&done.length===0&&(
+                    <div className="tpem">
+                      <p>Sin pendientes aún.</p>
+                      <p>Los comentarios aparecerán aquí automáticamente.</p>
+                    </div>
+                  )}
+                  {Object.entries(tgroups).map(([pname,items])=>(
+                    <div key={pname} className="tpg">
+                      <span className="tpgl"><span className="tpgd" style={{background:'var(--ac)'}}/>{pname}</span>
+                      {items.map(todo=>(
+                        <div key={todo.id} className="tpi">
+                          <div className={`tpck ${todo.completed?'done':''}`} onClick={()=>togTodo(todo.id)} style={{cursor:canManage?'pointer':'default'}}>
+                            {todo.completed&&'✓'}
+                          </div>
+                          <span className={`tptx ${todo.completed?'done':''}`}>{todo.text}</span>
+                          {todo.area&&todo.area!=='general'&&(
+                            <span className="tpat" style={{background:`${ACOL[todo.area]||'#555'}15`,color:ACOL[todo.area]||'#555'}}>
+                              {ALBL[todo.area]||todo.area}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                  {done.length>0&&(
+                    <div className="tpg">
+                      <span className="tpgl" style={{color:'#333'}}><span className="tpgd" style={{background:'#4ade80'}}/>Completados</span>
+                      {done.map(todo=>(
+                        <div key={todo.id} className="tpi">
+                          <div className="tpck done" onClick={()=>togTodo(todo.id)} style={{cursor:canManage?'pointer':'default'}}>✓</div>
+                          <span className="tptx done">{todo.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {canManage&&(
+                  <div className="tpad">
+                    <input className="tpin" placeholder="Agregar pendiente manual..." value={ntxt} onChange={e=>setNtxt(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addTodo()}/>
+                    <button className="tpab" onClick={addTodo}>+ Agregar pendiente</button>
+                  </div>
                 )}
-              </>
+              </div>
             )}
-            </div>{/* end page */}
-            {view === 'project' && activeProject && <TodosPanel />}
-          </div>{/* end content-area */}
+          </div>
         </div>
       </div>
 
-      {/* NEW PROJECT MODAL */}
-      {showNewProj && (
-        <div className="modal-overlay" onClick={()=>setShowNewProj(false)}>
-          <div className="modal" onClick={e=>e.stopPropagation()}>
-            <h2 className="modal-title">Nuevo proyecto</h2>
-            <label className="modal-label">Nombre del proyecto</label>
-            <input className="modal-input" placeholder="Ej. RBM DGEN Global Campaign" value={newProjName} onChange={e=>setNewProjName(e.target.value)}/>
-            <label className="modal-label">Cliente / Marca</label>
-            <input className="modal-input" placeholder="Ej. Meta / Ray-Ban" value={newProjClient} onChange={e=>setNewProjClient(e.target.value)}/>
-            <div className="modal-btns">
-              <button className="modal-btn-cancel" onClick={()=>setShowNewProj(false)}>Cancelar</button>
-              <button className="modal-btn-primary" onClick={createProject}>Crear proyecto</button>
+      {snwp&&(
+        <div className="mo" onClick={()=>setSnwp(false)}>
+          <div className="md" onClick={e=>e.stopPropagation()}>
+            <h2 className="mdt">Nuevo proyecto</h2>
+            <label className="mdl">Nombre del proyecto</label>
+            <input className="mdi" placeholder="Ej. RBM DGEN Global Campaign" value={npn} onChange={e=>setNpn(e.target.value)}/>
+            <label className="mdl">Cliente / Marca</label>
+            <input className="mdi" placeholder="Ej. Meta / Ray-Ban" value={npc} onChange={e=>setNpc(e.target.value)}/>
+            <div className="mdb">
+              <button className="mbca" onClick={()=>setSnwp(false)}>Cancelar</button>
+              <button className="mbok" onClick={createProj}>Crear proyecto</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ADD PIECE MODAL */}
-      {showAddPiece && (
-        <div className="modal-overlay" onClick={()=>setShowAddPiece(false)}>
-          <div className="modal" onClick={e=>e.stopPropagation()}>
-            <h2 className="modal-title">Agregar pieza</h2>
-            <label className="modal-label">Tag / Categoría</label>
-            <input className="modal-input" placeholder="Ej. CONCERT, FLOWERS, FRESH..." value={newPieceTag} onChange={e=>setNewPieceTag(e.target.value)}/>
-            <label className="modal-label">Nombre de la pieza</label>
-            <input className="modal-input" placeholder='Ej. Concert 15", Flowers 6"...' value={newPieceName} onChange={e=>setNewPieceName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addPiece()}/>
-            <label className="modal-label">Grupo (para filtrar)</label>
-            <input className="modal-input" placeholder="Ej. concert, flowers, fresh... (opcional)" value={newPieceGroup} onChange={e=>setNewPieceGroup(e.target.value)}/>
-            <div className="modal-btns">
-              <button className="modal-btn-cancel" onClick={()=>setShowAddPiece(false)}>Cancelar</button>
-              <button className="modal-btn-primary" onClick={addPiece}>Agregar</button>
+      {snwpc&&(
+        <div className="mo" onClick={()=>setSnwpc(false)}>
+          <div className="md" onClick={e=>e.stopPropagation()}>
+            <h2 className="mdt">Agregar pieza</h2>
+            <label className="mdl">Tag / Categoría</label>
+            <input className="mdi" placeholder="Ej. CONCERT, FLOWERS..." value={nptag} onChange={e=>setNptag(e.target.value)}/>
+            <label className="mdl">Nombre de la pieza</label>
+            <input className="mdi" placeholder='Ej. Concert 15"' value={npnm} onChange={e=>setNpnm(e.target.value)} onKeyDown={e=>e.key==='Enter'&&addPiece()}/>
+            <label className="mdl">Grupo (para filtrar)</label>
+            <input className="mdi" placeholder="Ej. concert, flowers..." value={npgr} onChange={e=>setNpgr(e.target.value)}/>
+            <div className="mdb">
+              <button className="mbca" onClick={()=>setSnwpc(false)}>Cancelar</button>
+              <button className="mbok" onClick={addPiece}>Agregar</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ADD MEMBER MODAL */}
-      {showAddMember && (
-        <div className="modal-overlay" onClick={()=>setShowAddMember(false)}>
-          <div className="modal" onClick={e=>e.stopPropagation()}>
-            <h2 className="modal-title">Agregar persona al proyecto</h2>
-            <label className="modal-label">Nombre</label>
-            <input className="modal-input" placeholder="Nombre completo" value={newMemberName} onChange={e=>setNewMemberName(e.target.value)}/>
-            <label className="modal-label">Email</label>
-            <input className="modal-input" type="email" placeholder="email@ejemplo.com" value={newMemberEmail} onChange={e=>setNewMemberEmail(e.target.value)}/>
-            <label className="modal-label">Rol en este proyecto</label>
-            <select className="modal-select" value={newMemberRole} onChange={e=>setNewMemberRole(e.target.value)}>
+      {snwm&&(
+        <div className="mo" onClick={()=>setSnwm(false)}>
+          <div className="md" onClick={e=>e.stopPropagation()}>
+            <h2 className="mdt">Agregar persona al proyecto</h2>
+            <label className="mdl">Nombre</label>
+            <input className="mdi" placeholder="Nombre completo" value={nmn} onChange={e=>setNmn(e.target.value)}/>
+            <label className="mdl">Email</label>
+            <input className="mdi" type="email" placeholder="email@ejemplo.com" value={nme} onChange={e=>setNme(e.target.value)}/>
+            <label className="mdl">Rol en este proyecto</label>
+            <select className="mds" value={nmr} onChange={e=>setNmr(e.target.value)}>
               <option value="agencia">Agencia</option>
               <option value="marca">Marca</option>
               <option value="casa_productora">Casa Productora</option>
               <option value="productor">Productor</option>
             </select>
-            <div className="modal-btns">
-              <button className="modal-btn-cancel" onClick={()=>setShowAddMember(false)}>Cancelar</button>
-              <button className="modal-btn-primary" onClick={addMember}>Agregar</button>
+            <div className="mdb">
+              <button className="mbca" onClick={()=>setSnwm(false)}>Cancelar</button>
+              <button className="mbok" onClick={addMbr}>Agregar</button>
             </div>
           </div>
         </div>
