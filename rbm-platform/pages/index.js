@@ -427,22 +427,39 @@ export default function Platform() {
 
   function addCmt(pid,area) {
     const cur=fbToItems(fb[pid]?.[area]?.feedback||'')
-    upFb(pid,area,'feedback',itemsToFb([...cur,{id:Date.now(),text:''}]))
+    const next=[...cur,{id:Date.now(),text:''}]
+    const newFeedback=itemsToFb(next)
+    // Update state directly
+    setFb(f=>({...f,[pid]:{...f[pid],[area]:{...(f[pid]?.[area]||{status:'pendiente',sources:[]}),feedback:newFeedback}}}))
   }
   function upCmt(pid,area,idx,value) {
     const cur=fbToItems(fb[pid]?.[area]?.feedback||'')
-    cur[idx]={...cur[idx],text:value}
-    upFb(pid,area,'feedback',itemsToFb(cur))
-    clearTimeout(window._tst)
-    window._tst=setTimeout(()=>{
+    const updated=cur.map((c,i)=>i===idx?{...c,text:value}:c)
+    const newFeedback=itemsToFb(updated)
+    // Update state directly
+    setFb(f=>({...f,[pid]:{...f[pid],[area]:{...(f[pid]?.[area]||{status:'pendiente',sources:[]}),feedback:newFeedback}}}))
+    // Save to DB with debounce
+    setSv('saving')
+    clearTimeout(window._st)
+    window._st=setTimeout(async()=>{
+      const cur2=fb[pid]?.[area]||{status:'pendiente',sources:[]}
+      const {data:existing}=await supabase.from('piece_feedback').select('id').eq('piece_id',pid).eq('area',area).single()
+      if(existing?.id) {
+        await supabase.from('piece_feedback').update({feedback:newFeedback,status:cur2.status,sources:cur2.sources,updated_at:new Date().toISOString()}).eq('id',existing.id)
+      } else {
+        await supabase.from('piece_feedback').insert({piece_id:pid,area,feedback:newFeedback,status:cur2.status||'pendiente',sources:cur2.sources||[]})
+      }
+      setSv('saved'); setTimeout(()=>setSv('idle'),2000)
+      // Sync todos
       const piece=pieces.find(p=>p.id===pid)
-      if(piece&&ap) syncTodos(pid,piece.name,area,cur.map((c,i)=>i===idx?{...c,text:value}:c))
-    },1500)
+      if(piece&&ap) syncTodos(pid,piece.name,area,updated)
+    },1000)
   }
   function delCmt(pid,area,idx) {
     const cur=fbToItems(fb[pid]?.[area]?.feedback||'')
     cur.splice(idx,1)
-    upFb(pid,area,'feedback',itemsToFb(cur))
+    const newFeedback=itemsToFb(cur)
+    setFb(f=>({...f,[pid]:{...f[pid],[area]:{...(f[pid]?.[area]||{status:'pendiente',sources:[]}),feedback:newFeedback}}}))
   }
 
   async function syncTodos(pid,pname,area,items) {
