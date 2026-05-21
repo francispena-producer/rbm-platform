@@ -243,8 +243,8 @@ button{cursor:pointer}
 
 function initials(n) { return (n||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2) }
 function fbToItems(fb) {
-  if(!fb?.trim()) return []
-  return fb.split('\n').filter(l=>l.trim()).map((l,i)=>({id:i,text:l.replace(/^[·•\-]\s*/,'')}))
+  if (fb === null || fb === undefined || fb === '') return []
+  return fb.split('\n').map((l, i) => ({id: i, text: l.replace(/^[·•\-]\s*/, '')}))
 }
 function itemsToFb(items) { return items.map(i=>i.text).join('\n') }
 
@@ -761,9 +761,9 @@ export default function Platform() {
                                           <textarea
                                             style={{flex:1,background:'transparent',border:'none',color:'var(--tx)',fontFamily:'DM Sans,sans-serif',fontSize:'12px',lineHeight:'1.5',outline:'none',resize:'none',minHeight:'20px'}}
                                             placeholder="Escribe el comentario..."
-                                            defaultValue={item.text}
+                                            value={item.text}
                                             rows={1}
-                                            onBlur={e => upCmt(piece.id, a.key, idx, e.target.value)}
+                                            onChange={e => upCmt(piece.id, a.key, idx, e.target.value)}
                                             onKeyDown={e => { if(e.key==='Enter'){ e.preventDefault(); upCmt(piece.id, a.key, idx, e.target.value); addCmt(piece.id, a.key) } }}
                                           />
                                           <button style={{background:'none',border:'none',color:'var(--mu)',fontSize:'12px',padding:'0 2px',flexShrink:0,cursor:'pointer',lineHeight:1}}
@@ -805,9 +805,9 @@ export default function Platform() {
                                     <textarea
                                       style={{flex:1,background:'transparent',border:'none',color:'var(--tx)',fontFamily:'DM Sans,sans-serif',fontSize:'12px',lineHeight:'1.5',outline:'none',resize:'none',minHeight:'20px'}}
                                       placeholder="Escribe el comentario..."
-                                      defaultValue={item.text}
+                                      value={item.text}
                                       rows={1}
-                                      onBlur={e => upCmt(piece.id, 'vfx', idx, e.target.value)}
+                                      onChange={e => upCmt(piece.id, 'vfx', idx, e.target.value)}
                                       onKeyDown={e => { if(e.key==='Enter'){ e.preventDefault(); upCmt(piece.id, 'vfx', idx, e.target.value); addCmt(piece.id, 'vfx') } }}
                                     />
                                     <button style={{background:'none',border:'none',color:'var(--mu)',fontSize:'12px',padding:'0 2px',flexShrink:0,cursor:'pointer',lineHeight:1}}
