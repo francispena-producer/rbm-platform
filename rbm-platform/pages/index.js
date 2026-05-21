@@ -365,7 +365,13 @@ export default function Platform() {
       supabase.from('piece_approvals').select('*').in('piece_id',ids),
       supabase.from('piece_visibility').select('*').in('piece_id',ids),
     ])
-    const fm={}; fbs.data?.forEach(f=>{ if(!fm[f.piece_id]) fm[f.piece_id]={}; fm[f.piece_id][f.area]={feedback:f.feedback,status:f.status,sources:f.sources||[]} }); setFb(fm)
+    const fm={}
+    pcs.data?.forEach(p => {
+      fm[p.id] = {}
+      AREAS.forEach(a => { fm[p.id][a.key] = {feedback:'', status:'pendiente', sources:[]} })
+      fm[p.id]['vfx'] = {feedback:'', status:'pendiente', sources:[]}
+    })
+    fbs.data?.forEach(f=>{ if(!fm[f.piece_id]) fm[f.piece_id]={}; fm[f.piece_id][f.area]={feedback:f.feedback||'',status:f.status,sources:f.sources||[]} }); setFb(fm)
     const am={}; apps.data?.forEach(a=>{ if(!am[a.piece_id]) am[a.piece_id]={}; am[a.piece_id][a.role]=a.state }); setApprovs(am)
     const vm={}; vs.data?.forEach(v=>{ vm[v.piece_id]={marca:v.visible_to_marca,casa:v.visible_to_casa} }); setVis(vm)
   }
