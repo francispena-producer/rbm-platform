@@ -518,10 +518,10 @@ export default function Platform() {
 
   if(!user) return (
     <>
-      <Head><title>Roundtable</title><style>{css}</style></Head>
+      <Head><title>Wipboard</title><style>{css}</style></Head>
       <div className="aw">
         <div className="ab">
-          <p className="alo">Roundtable</p>
+          <p className="alo">Wipboard</p>
           <h1 className="ati">{aMode==='login'?'Bienvenida':aMode==='register'?'Crear cuenta':'Recuperar contraseña'}</h1>
           <p className="asu">{aMode==='login'?'Entra con tus credenciales':aMode==='register'?'Completa tu perfil':'Te enviaremos un link a tu correo'}</p>
           {aMode==='register'&&(<>
@@ -566,11 +566,11 @@ export default function Platform() {
 
   return (
     <>
-      <Head><title>Roundtable</title><style>{css}</style></Head>
+      <Head><title>Wipboard</title><style>{css}</style></Head>
       <div className="shell">
         <div className="sb">
           <div className="sb-logo">
-            <p className="sb-tag">Roundtable</p>
+            <p className="sb-tag">Wipboard</p>
             <p className="sb-nm">Dashboard</p>
           </div>
           <nav className="sb-nav">
