@@ -248,6 +248,26 @@ function fbToItems(fb) {
 }
 function itemsToFb(items) { return items.map(i=>i.text).join('\n') }
 
+const BulletItem = ({ pieceId, area, idx, text, onSave, onDelete }) => {
+  const [val, setVal] = React.useState(text)
+  return (
+    <div style={{display:'flex',alignItems:'flex-start',gap:'6px',background:'#111',border:'1px solid var(--bd)',borderRadius:'4px',padding:'6px 8px'}}>
+      <span style={{color:'var(--mu)',flexShrink:0,marginTop:'1px',userSelect:'none'}}>·</span>
+      <textarea
+        style={{flex:1,background:'transparent',border:'none',color:'var(--tx)',fontFamily:'DM Sans,sans-serif',fontSize:'12px',lineHeight:'1.5',outline:'none',resize:'none',minHeight:'20px'}}
+        placeholder="Escribe el comentario..."
+        value={val}
+        rows={1}
+        onChange={e => setVal(e.target.value)}
+        onBlur={e => onSave(e.target.value)}
+        onKeyDown={e => { if(e.key==='Enter'){ e.preventDefault(); onSave(val) } }}
+      />
+      <button style={{background:'none',border:'none',color:'var(--mu)',fontSize:'12px',padding:'0 2px',flexShrink:0,cursor:'pointer',lineHeight:1}}
+        onClick={onDelete}>✕</button>
+    </div>
+  )
+}
+
 export default function Platform() {
   const [user,setUser]               = useState(null)
   const [prof,setProf]               = useState(null)
@@ -518,10 +538,10 @@ export default function Platform() {
 
   if(!user) return (
     <>
-      <Head><title>Wipboard</title><style>{css}</style></Head>
+      <Head><title>Roundtable</title><style>{css}</style></Head>
       <div className="aw">
         <div className="ab">
-          <p className="alo">Wipboard</p>
+          <p className="alo">Roundtable</p>
           <h1 className="ati">{aMode==='login'?'Bienvenida':aMode==='register'?'Crear cuenta':'Recuperar contraseña'}</h1>
           <p className="asu">{aMode==='login'?'Entra con tus credenciales':aMode==='register'?'Completa tu perfil':'Te enviaremos un link a tu correo'}</p>
           {aMode==='register'&&(<>
@@ -566,11 +586,11 @@ export default function Platform() {
 
   return (
     <>
-      <Head><title>Wipboard</title><style>{css}</style></Head>
+      <Head><title>Roundtable</title><style>{css}</style></Head>
       <div className="shell">
         <div className="sb">
           <div className="sb-logo">
-            <p className="sb-tag">Wipboard</p>
+            <p className="sb-tag">Roundtable</p>
             <p className="sb-nm">Dashboard</p>
           </div>
           <nav className="sb-nav">
@@ -762,19 +782,15 @@ export default function Platform() {
                                     )}
                                     <div style={{display:'flex',flexDirection:'column',gap:'4px',marginBottom:'8px'}}>
                                       {fbToItems(af.feedback).map((item, idx) => (
-                                        <div key={`${piece.id}-${a.key}-${idx}`} style={{display:'flex',alignItems:'flex-start',gap:'6px',background:'#111',border:'1px solid var(--bd)',borderRadius:'4px',padding:'6px 8px'}}>
-                                          <span style={{color:'var(--mu)',flexShrink:0,marginTop:'1px',userSelect:'none'}}>·</span>
-                                          <textarea
-                                            style={{flex:1,background:'transparent',border:'none',color:'var(--tx)',fontFamily:'DM Sans,sans-serif',fontSize:'12px',lineHeight:'1.5',outline:'none',resize:'none',minHeight:'20px'}}
-                                            placeholder="Escribe el comentario..."
-                                            defaultValue={item.text}
-                                            rows={1}
-                                            onBlur={e => upCmt(piece.id, a.key, idx, e.target.value)}
-                                            onKeyDown={e => { if(e.key==='Enter'){ e.preventDefault(); const val=e.target.value; upCmt(piece.id, a.key, idx, val); setTimeout(()=>addCmt(piece.id, a.key), 50) } }}
-                                          />
-                                          <button style={{background:'none',border:'none',color:'var(--mu)',fontSize:'12px',padding:'0 2px',flexShrink:0,cursor:'pointer',lineHeight:1}}
-                                            onClick={() => delCmt(piece.id, a.key, idx)}>✕</button>
-                                        </div>
+                                        <BulletItem
+                                          key={`${piece.id}-${a.key}-${idx}`}
+                                          pieceId={piece.id}
+                                          area={a.key}
+                                          idx={idx}
+                                          text={item.text}
+                                          onSave={val => upCmt(piece.id, a.key, idx, val)}
+                                          onDelete={() => delCmt(piece.id, a.key, idx)}
+                                        />
                                       ))}
                                     </div>
                                     <button style={{display:'flex',alignItems:'center',gap:'5px',background:'none',border:'1px dashed var(--bd)',borderRadius:'4px',color:'var(--mu)',fontSize:'10px',fontFamily:'DM Mono,monospace',padding:'5px 10px',width:'100%',cursor:'pointer',letterSpacing:'.05em'}}
@@ -806,19 +822,15 @@ export default function Platform() {
                               </div>
                               <div style={{display:'flex',flexDirection:'column',gap:'4px',marginBottom:'8px'}}>
                                 {fbToItems(pf2.vfx?.feedback||'').map((item, idx) => (
-                                  <div key={`${piece.id}-vfx-${idx}`} style={{display:'flex',alignItems:'flex-start',gap:'6px',background:'#111',border:'1px solid var(--bd)',borderRadius:'4px',padding:'6px 8px'}}>
-                                    <span style={{color:'var(--mu)',flexShrink:0,marginTop:'1px',userSelect:'none'}}>·</span>
-                                    <textarea
-                                      style={{flex:1,background:'transparent',border:'none',color:'var(--tx)',fontFamily:'DM Sans,sans-serif',fontSize:'12px',lineHeight:'1.5',outline:'none',resize:'none',minHeight:'20px'}}
-                                      placeholder="Escribe el comentario..."
-                                      defaultValue={item.text}
-                                      rows={1}
-                                      onBlur={e => upCmt(piece.id, 'vfx', idx, e.target.value)}
-                                      onKeyDown={e => { if(e.key==='Enter'){ e.preventDefault(); const val=e.target.value; upCmt(piece.id, 'vfx', idx, val); setTimeout(()=>addCmt(piece.id, 'vfx'), 50) } }}
-                                    />
-                                    <button style={{background:'none',border:'none',color:'var(--mu)',fontSize:'12px',padding:'0 2px',flexShrink:0,cursor:'pointer',lineHeight:1}}
-                                      onClick={() => delCmt(piece.id, 'vfx', idx)}>✕</button>
-                                  </div>
+                                  <BulletItem
+                                    key={`${piece.id}-vfx-${idx}`}
+                                    pieceId={piece.id}
+                                    area="vfx"
+                                    idx={idx}
+                                    text={item.text}
+                                    onSave={val => upCmt(piece.id, 'vfx', idx, val)}
+                                    onDelete={() => delCmt(piece.id, 'vfx', idx)}
+                                  />
                                 ))}
                               </div>
                               <button style={{display:'flex',alignItems:'center',gap:'5px',background:'none',border:'1px dashed var(--bd)',borderRadius:'4px',color:'var(--mu)',fontSize:'10px',fontFamily:'DM Mono,monospace',padding:'5px 10px',width:'100%',cursor:'pointer',letterSpacing:'.05em'}}
