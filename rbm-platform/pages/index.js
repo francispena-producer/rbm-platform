@@ -761,10 +761,10 @@ export default function Platform() {
                                           <textarea
                                             style={{flex:1,background:'transparent',border:'none',color:'var(--tx)',fontFamily:'DM Sans,sans-serif',fontSize:'12px',lineHeight:'1.5',outline:'none',resize:'none',minHeight:'20px'}}
                                             placeholder="Escribe el comentario..."
-                                            value={item.text}
+                                            defaultValue={item.text}
                                             rows={1}
-                                            onChange={e => upCmt(piece.id, a.key, idx, e.target.value)}
-                                            onKeyDown={e => { if(e.key==='Enter'){ e.preventDefault(); upCmt(piece.id, a.key, idx, e.target.value); addCmt(piece.id, a.key) } }}
+                                            onBlur={e => upCmt(piece.id, a.key, idx, e.target.value)}
+                                            onKeyDown={e => { if(e.key==='Enter'){ e.preventDefault(); const val=e.target.value; upCmt(piece.id, a.key, idx, val); setTimeout(()=>addCmt(piece.id, a.key), 50) } }}
                                           />
                                           <button style={{background:'none',border:'none',color:'var(--mu)',fontSize:'12px',padding:'0 2px',flexShrink:0,cursor:'pointer',lineHeight:1}}
                                             onClick={() => delCmt(piece.id, a.key, idx)}>✕</button>
@@ -805,10 +805,10 @@ export default function Platform() {
                                     <textarea
                                       style={{flex:1,background:'transparent',border:'none',color:'var(--tx)',fontFamily:'DM Sans,sans-serif',fontSize:'12px',lineHeight:'1.5',outline:'none',resize:'none',minHeight:'20px'}}
                                       placeholder="Escribe el comentario..."
-                                      value={item.text}
+                                      defaultValue={item.text}
                                       rows={1}
-                                      onChange={e => upCmt(piece.id, 'vfx', idx, e.target.value)}
-                                      onKeyDown={e => { if(e.key==='Enter'){ e.preventDefault(); upCmt(piece.id, 'vfx', idx, e.target.value); addCmt(piece.id, 'vfx') } }}
+                                      onBlur={e => upCmt(piece.id, 'vfx', idx, e.target.value)}
+                                      onKeyDown={e => { if(e.key==='Enter'){ e.preventDefault(); const val=e.target.value; upCmt(piece.id, 'vfx', idx, val); setTimeout(()=>addCmt(piece.id, 'vfx'), 50) } }}
                                     />
                                     <button style={{background:'none',border:'none',color:'var(--mu)',fontSize:'12px',padding:'0 2px',flexShrink:0,cursor:'pointer',lineHeight:1}}
                                       onClick={() => delCmt(piece.id, 'vfx', idx)}>✕</button>
