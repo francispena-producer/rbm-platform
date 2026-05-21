@@ -249,7 +249,7 @@ function fbToItems(fb) {
 function itemsToFb(items) { return items.map(i=>i.text).join('\n') }
 
 const BulletItem = ({ pieceId, area, idx, text, onSave, onDelete }) => {
-  const [val, setVal] = React.useState(text)
+  const [val, setVal] = useState(text)
   return (
     <div style={{display:'flex',alignItems:'flex-start',gap:'6px',background:'#111',border:'1px solid var(--bd)',borderRadius:'4px',padding:'6px 8px'}}>
       <span style={{color:'var(--mu)',flexShrink:0,marginTop:'1px',userSelect:'none'}}>·</span>
